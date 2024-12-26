@@ -1,0 +1,1 @@
+cmd /c start .\.venv\Scripts\pythonw.exe VSCP4CANToolBox.pyw

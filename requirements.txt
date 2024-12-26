@@ -1,0 +1,16 @@
+singledispatch
+numpy
+crc
+keyboard
+# ischedule
+pywin32;sys_platform == 'win32'
+uptime
+pyserial
+pyusb
+libusb
+python-can
+pillow
+tk
+customtkinter
+CTkMenuBar
+tkinter-async-execute
