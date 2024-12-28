@@ -497,7 +497,7 @@ async def _firmware_send_start_data_block(nickname: int, block_id: int) -> bool:
     return result
 
 
-async def _firmware_send_data_block(nickname: int, chunk_gap: int, block: list) -> bool:
+async def _firmware_send_data_block(nickname: int, chunk_gap: int, block: list, progress: float, progress_chunk: float) -> bool: # pylint: disable=too-many-locals
     result = False
     vscp_msg = {
         'class':        {'id': None,    'name': 'CLASS1.PROTOCOL'},
@@ -507,10 +507,15 @@ async def _firmware_send_data_block(nickname: int, chunk_gap: int, block: list) 
         'isHardCoded':  False,
         }
     block_crc = Calculator(Crc16.IBM_3740, True).checksum(bytes(block))
+    chunks = int(len(block) / MAX_CAN_DLC)
+    step = progress_chunk / chunks
+    block_progress = progress
     for chunk in [block[i:i + MAX_CAN_DLC] for i in range(0, len(block), MAX_CAN_DLC)]:
         await asyncio.sleep(chunk_gap)
         vscp_msg['data'] = chunk
         _message.send(vscp_msg)
+        block_progress = block_progress + step
+        _update_scan_progress(block_progress)
     stop = False
     for _ in range(PROBE_RETRIES_LONG):
         await asyncio.sleep(PROBE_SLEEP)
@@ -629,14 +634,18 @@ async def _firmware_activate_new_image(nickname: int, firmware_crc: int) -> bool
     return result
 
 
-async def firmware_upload(nickname: int, firmware: list) -> bool: # TODO add progress
+async def firmware_upload(nickname: int, firmware: list) -> bool: # pylint: disable=too-many-locals
     global _async_work # pylint: disable=global-statement
     result = False
+    progress = 0.0
+    _update_scan_progress(progress)
     if _async_work is False: # pylint: disable=too-many-nested-blocks
         _async_work = True
         _message.enable_feeder()
         bootloader_type = 0x00
         device_block_params = await _firmware_enter_bootloader_mode(nickname, bootloader_type)
+        progress = 0.02
+        _update_scan_progress(progress)
         if device_block_params is not None:
             flash_block_size = device_block_params[0]
             number_of_blocks = device_block_params[1]
@@ -646,6 +655,7 @@ async def firmware_upload(nickname: int, firmware: list) -> bool: # TODO add pro
             firmware_crc = Calculator(Crc16.IBM_3740, True).checksum(bytes(firmware))
             blocks_to_program = int(len(firmware) / flash_block_size)
             if blocks_to_program <= number_of_blocks:
+                step = 0.96 / blocks_to_program
                 success = False
                 for idx, block in enumerate([firmware[i:i + flash_block_size] for i in range(0, len(firmware), flash_block_size)]):
                     retry = 0
@@ -654,17 +664,21 @@ async def firmware_upload(nickname: int, firmware: list) -> bool: # TODO add pro
                         retry += 1
                         success = await _firmware_send_start_data_block(nickname, idx)
                         if success is True:
-                            success = await _firmware_send_data_block(nickname, chunk_gap, block)
+                            success = await _firmware_send_data_block(nickname, chunk_gap, block, progress, step)
                         else:
                             await asyncio.sleep(BLOCK_WRITE_GAP)
                         if success is True:
                             success = await _firmware_send_program_data_block(nickname, idx)
                         if success is True:
                             break
+                    progress = progress + step
+                    _update_scan_progress(progress)
                     if success is False:
                         break #Fail to program firmware
+                _update_scan_progress(0.98)
                 if success is True:
                     result = await _firmware_activate_new_image(nickname, firmware_crc)
         _message.disable_feeder(True)
         _async_work = False
+    _update_scan_progress(1.0)
     return result
