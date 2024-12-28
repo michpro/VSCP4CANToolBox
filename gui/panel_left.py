@@ -1,12 +1,14 @@
 # pylint: disable=missing-module-docstring, missing-class-docstring, missing-function-docstring, too-many-ancestors
 
+import os
 import tk_async_execute as tae
 import customtkinter as ctk
+from intelhex import IntelHex
 import vscp
 from .treeview import CTkTreeview
 from .common import add_set_state_callback, call_set_scan_widget_state,     \
                     add_neighbours_handle, neighbours_handle
-# from .popup import CTkFloatingWindow
+from .popup import CTkFloatingWindow
 
 class LeftPanel(ctk.CTkFrame):
     def __init__(self, parent):
@@ -210,7 +212,7 @@ class ScanWidget(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
     #     #     if node['isHardCoded'] is True:
     #     #         node_id = '►' + node_id + '◄'
     #     #     data = [{'text': node_id,
-    #     #             'child': [{'text': 'GUID:', 'values': [node['guid']['str']]}, 
+    #     #             'child': [{'text': 'GUID:', 'values': [node['guid']['str']]},
     #     #                     {'text': 'MDF:',  'values': ['http://' + node['mdf']]}
     #     #                     ]
     #     #         }]
@@ -239,16 +241,17 @@ class ScanWidget(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
 class Neighbours(ctk.CTkFrame):
     def __init__(self, parent):
         super().__init__(parent)
+        self.selected_row_id = ''
 
         header = [('node', 'Node', 75, 75, 'center', 'w'),
                   ('description', '', 356, 356, 'center', 'w'),
                  ]
         # data = [{'text': '►0xAA◄',
-        #          'child': [{'text': 'GUID:', 'values': ['FF:FF:FF:FF:FF:FF:FF:FF:FF:FF:FF:FF:FF:FF:FF:01']}, 
+        #          'child': [{'text': 'GUID:', 'values': ['FF:FF:FF:FF:FF:FF:FF:FF:FF:FF:FF:FF:FF:FF:FF:01']},
         #                    {'text': 'MDF:', 'values': ['vscp.local/mdf/mdf_file.xml']},
         #                    ]},
         #         {'text': '0x0A',
-        #          'child': [{'text': 'GUID:', 'values': ['AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA']}, 
+        #          'child': [{'text': 'GUID:', 'values': ['AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA']},
         #                    {'text': 'MDF:', 'values': ['vscp.local/mdf/mdf_file.xml']}]}
         #        ]
         self.widget = ctk.CTkFrame(parent, fg_color='transparent')
@@ -256,7 +259,12 @@ class Neighbours(ctk.CTkFrame):
         # self.neighbours = CTkTreeview(self.widget, header, data, xscroll=False)
         self.neighbours = CTkTreeview(self.widget, header, xscroll=False)
         self.neighbours.pack(padx=0, pady=0, fill='both', expand=True)
-        self.neighbours.treeview.bind('<Double-Button-1>', self.item_deselect)
+        self.neighbours.treeview.bind('<Double-Button-1>', self._item_deselect)
+        self.neighbours.treeview.bind('<Button-3>', lambda event: self._show_menu(event, self.dropdown)) # pylint: disable=line-too-long
+        self.dropdown = CTkFloatingWindow(self.neighbours)
+        dropdown_bt_firmware = ctk.CTkButton(self.dropdown.frame, border_spacing=0, corner_radius=0,
+                                              text="Upload Firmware", command=self._firmware_upload)
+        dropdown_bt_firmware.pack(expand=True, fill="x", padx=0, pady=0)
         # print(len(self.neighbours.treeview.get_children()))
         # self.neighbours.delete_all_items()
         # print(len(self.neighbours.treeview.get_children()))
@@ -268,7 +276,7 @@ class Neighbours(ctk.CTkFrame):
         self.neighbours.insert_items(row_data)
 
 
-    def item_deselect(self, event):
+    def _item_deselect(self, event):
         selected_rows = self.neighbours.treeview.selection()
         row_clicked = self.neighbours.treeview.identify('row', event.x, event.y)
         index = selected_rows.index(row_clicked) if row_clicked in selected_rows else -1
@@ -279,3 +287,46 @@ class Neighbours(ctk.CTkFrame):
     def delete_all_items(self) -> None:
         for item in self.neighbours.treeview.get_children():
             self.neighbours.treeview.delete(item)
+
+
+    def _show_menu(self, event, menu):
+        self.selected_row_id = self.neighbours.treeview.identify('row', event.x, event.y)
+        try:
+            if '' != self.selected_row_id:
+                menu.popup(event.x_root, event.y_root)
+        finally:
+            menu.grab_release()
+
+
+    def _get_node_id(self) -> int:
+        parent_id = self.neighbours.treeview.parent(self.selected_row_id)
+        text = self.neighbours.treeview.item(parent_id)['text'] if parent_id else   \
+            self.neighbours.treeview.item(self.selected_row_id)['text']
+        try:
+            result = int(text, 0)
+        except ValueError:
+            result = -1
+        return result
+
+    # async def _call_vscp_firmware_upload(self, node_id: int, firmware: list) -> None:
+
+
+
+    def _firmware_upload(self):
+        node_id = self._get_node_id()
+        current_path = os.getcwd()
+        filetypes = (('bin files', '*.bin'), ('hex files', '*.hex'))
+        fw_path = ctk.filedialog.askopenfilename(title='Select Firmware to upload',
+                                                 initialdir=current_path,
+                                                 filetypes=filetypes)
+        if '' != fw_path:
+            extension = os.path.splitext(fw_path)[1][1:].lower()
+            fw = IntelHex()
+            try:
+                fw.fromfile(fw_path, format=extension)
+                fw_data = fw.tobinarray().tolist()
+                result = True
+            except ValueError:
+                result = False
+            if result is True:
+                tae.async_execute(vscp.firmware_upload(node_id, fw_data), visible=False)

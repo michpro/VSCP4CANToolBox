@@ -1,6 +1,7 @@
 # pylint: disable=missing-module-docstring, missing-class-docstring, missing-function-docstring
 # pylint: disable=line-too-long, too-many-ancestors
 
+import csv
 import customtkinter as ctk
 from .treeview import CTkTreeview
 from .popup import CTkFloatingWindow
@@ -33,12 +34,15 @@ class Messages(ctk.CTkFrame):
 
         self.messages.treeview.bind('<Button-3>', lambda event: self._show_menu(event, self.dropdown))
         self.dropdown = CTkFloatingWindow(self.widget)
-        dropdown_bt_clear_all = ctk.CTkButton(self.dropdown.frame, border_spacing=0, corner_radius=0,
+        self.dropdown_bt_clear_all = ctk.CTkButton(self.dropdown.frame, border_spacing=0, corner_radius=0,
                                               text="Clear all items", command=self._clear_all_items)
-        dropdown_bt_clear_all.pack(expand=True, fill="x", padx=0, pady=0)
-        dropdown_bt_clear_selected = ctk.CTkButton(self.dropdown.frame, border_spacing=0, corner_radius=0,
-                                                   text="Clear selected items", command=self._clear_selected_items)
-        dropdown_bt_clear_selected.pack(expand=True, fill="x", padx=0, pady=0)
+        self.dropdown_bt_clear_all.pack(expand=True, fill="x", padx=0, pady=0)
+        self.dropdown_bt_clear_selected = ctk.CTkButton(self.dropdown.frame, border_spacing=0, corner_radius=0,
+                                                        text="Clear selected items", command=self._clear_selected_items)
+        self.dropdown_bt_clear_selected.pack(expand=True, fill="x", padx=0, pady=0)
+        self.dropdown_bt_save_log = ctk.CTkButton(self.dropdown.frame, border_spacing=0, corner_radius=0,
+                                                  text="Save log to file", command=self._save_log)
+        self.dropdown_bt_save_log.pack(expand=True, fill="x", padx=0, pady=0)
 
 
     def insert(self, row_data):
@@ -62,8 +66,23 @@ class Messages(ctk.CTkFrame):
         for row in selected_rows:
             self.messages.treeview.delete(row)
 
+    def _save_log(self):
+        filetypes = [('CSV Log File', '*.csv')]
+        fname = ctk.filedialog.asksaveasfilename(confirmoverwrite=True, initialfile='vscp_log',
+                                                 filetypes=filetypes, defaultextension=filetypes)
+        if fname:
+            with open(fname, "w", newline='', encoding='UTF-8') as log_file:
+                csvwriter = csv.writer(log_file, delimiter=',')
+                for row_id in self.messages.treeview.get_children():
+                    row = self.messages.treeview.item(row_id)['values']
+                    csvwriter.writerow(row)
+
     def _show_menu(self, event, menu):
         try:
+            state = 'normal' if 0 != len(self.messages.treeview.get_children()) else 'disabled'
+            self.dropdown_bt_clear_all.configure(state=state)
+            self.dropdown_bt_clear_selected.configure(state=state)
+            self.dropdown_bt_save_log.configure(state=state)
             menu.popup(event.x_root, event.y_root)
         finally:
             menu.grab_release()

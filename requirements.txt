@@ -1,8 +1,7 @@
 singledispatch
 numpy
 crc
-keyboard
-# ischedule
+intelhex
 pywin32;sys_platform == 'win32'
 uptime
 pyserial
