@@ -12,4 +12,5 @@ pillow
 tk
 customtkinter
 CTkMenuBar
+CTkMessagebox
 tkinter-async-execute

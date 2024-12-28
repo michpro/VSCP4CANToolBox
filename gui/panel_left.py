@@ -3,6 +3,7 @@
 import os
 import tk_async_execute as tae
 import customtkinter as ctk
+from CTkMessagebox import CTkMessagebox
 from intelhex import IntelHex
 import vscp
 from .treeview import CTkTreeview
@@ -308,25 +309,37 @@ class Neighbours(ctk.CTkFrame):
             result = -1
         return result
 
-    # async def _call_vscp_firmware_upload(self, node_id: int, firmware: list) -> None:
 
+    def _confirm_firmware_upload(self, node_id: int) -> bool:
+        title = 'Uploading new firmware'
+        message = f'Are you sure you want to upload new firmware to node 0x{node_id:02X}?'
+        msg = CTkMessagebox(title=title, message=message, icon='question',
+                            option_1='No', option_2='Yes')
+        response = msg.get()
+        return 'Yes' == str(response)
 
 
     def _firmware_upload(self):
         node_id = self._get_node_id()
-        current_path = os.getcwd()
-        filetypes = (('bin files', '*.bin'), ('hex files', '*.hex'))
-        fw_path = ctk.filedialog.askopenfilename(title='Select Firmware to upload',
-                                                 initialdir=current_path,
-                                                 filetypes=filetypes)
-        if '' != fw_path:
-            extension = os.path.splitext(fw_path)[1][1:].lower()
-            fw = IntelHex()
-            try:
-                fw.fromfile(fw_path, format=extension)
-                fw_data = fw.tobinarray().tolist()
-                result = True
-            except ValueError:
-                result = False
-            if result is True:
-                tae.async_execute(vscp.firmware_upload(node_id, fw_data), visible=False)
+        if -1 < node_id:
+            current_path = os.getcwd()
+            filetypes = (('bin files', '*.bin'), ('hex files', '*.hex'))
+            fw_path = ctk.filedialog.askopenfilename(title='Select Firmware to upload',
+                                                     initialdir=current_path,
+                                                     filetypes=filetypes)
+            if '' != fw_path:
+                if self._confirm_firmware_upload(node_id) is True:
+                    extension = os.path.splitext(fw_path)[1][1:].lower()
+                    fw = IntelHex()
+                    try:
+                        fw.fromfile(fw_path, format=extension)
+                        fw_data = fw.tobinarray().tolist()
+                        result = True
+                    except ValueError:
+                        result = False
+                    if result is True:
+                        tae.async_execute(vscp.firmware_upload(node_id, fw_data), visible=False)
+            else:
+                CTkMessagebox(title='Error', message='Firmware file not selected!!!', icon='cancel')
+        else:
+            CTkMessagebox(title='Error', message='Undefined Node ID!!!', icon='cancel')

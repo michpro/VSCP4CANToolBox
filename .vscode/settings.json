@@ -3,6 +3,8 @@
         ".venv": true
     },
     "search.exclude": {
-        ".venv": true
+        ".venv": true,
+        "*.txt": true,
+        "*.csv": true
     },
 }
