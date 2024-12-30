@@ -1,4 +1,5 @@
 # pylint: disable=missing-module-docstring, missing-class-docstring, missing-function-docstring, too-many-ancestors
+# pylint: disable=line-too-long
 
 import os
 import tk_async_execute as tae
@@ -10,6 +11,7 @@ from .treeview import CTkTreeview
 from .common import add_set_state_callback, call_set_scan_widget_state,     \
                     add_neighbours_handle, neighbours_handle
 from .popup import CTkFloatingWindow
+
 
 class LeftPanel(ctk.CTkFrame):
     def __init__(self, parent):
@@ -247,30 +249,20 @@ class Neighbours(ctk.CTkFrame):
         header = [('node', 'Node', 75, 75, 'center', 'w'),
                   ('description', '', 356, 356, 'center', 'w'),
                  ]
-        # data = [{'text': '►0xAA◄',
-        #          'child': [{'text': 'GUID:', 'values': ['FF:FF:FF:FF:FF:FF:FF:FF:FF:FF:FF:FF:FF:FF:FF:01']},
-        #                    {'text': 'MDF:', 'values': ['vscp.local/mdf/mdf_file.xml']},
-        #                    ]},
-        #         {'text': '0x0A',
-        #          'child': [{'text': 'GUID:', 'values': ['AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA']},
-        #                    {'text': 'MDF:', 'values': ['vscp.local/mdf/mdf_file.xml']}]}
-        #        ]
         self.widget = ctk.CTkFrame(parent, fg_color='transparent')
         self.widget.pack(padx=0, pady=5, side='top', anchor='nw', fill='both', expand=True)
-        # self.neighbours = CTkTreeview(self.widget, header, data, xscroll=False)
         self.neighbours = CTkTreeview(self.widget, header, xscroll=False)
         self.neighbours.pack(padx=0, pady=0, fill='both', expand=True)
         self.neighbours.treeview.bind('<Double-Button-1>', self._item_deselect)
-        self.neighbours.treeview.bind('<Button-3>', lambda event: self._show_menu(event, self.dropdown)) # pylint: disable=line-too-long
+        self.neighbours.treeview.bind('<Button-3>', lambda event: self._show_menu(event, self.dropdown))
+
         self.dropdown = CTkFloatingWindow(self.neighbours)
         dropdown_bt_firmware = ctk.CTkButton(self.dropdown.frame, border_spacing=0, corner_radius=0,
-                                              text="Upload Firmware", command=self._firmware_upload)
+                                             text="Upload Firmware", command=self._firmware_upload)
         dropdown_bt_firmware.pack(expand=True, fill="x", padx=0, pady=0)
-        # print(len(self.neighbours.treeview.get_children()))
-        # self.neighbours.delete_all_items()
-        # print(len(self.neighbours.treeview.get_children()))
-        # for item in self.neighbours.treeview.get_children():
-        #     print(self.neighbours.treeview.delete(item))
+        dropdown_bt_chg_node_id = ctk.CTkButton(self.dropdown.frame, border_spacing=0, corner_radius=0,
+                                                text="Change Node ID", command=self._change_node_id)
+        dropdown_bt_chg_node_id.pack(expand=True, fill="x", padx=0, pady=0)
 
 
     def insert(self, row_data):
@@ -343,3 +335,7 @@ class Neighbours(ctk.CTkFrame):
                 CTkMessagebox(title='Error', message='Firmware file not selected!!!', icon='cancel')
         else:
             CTkMessagebox(title='Error', message='Undefined Node ID!!!', icon='cancel')
+
+
+    def _change_node_id(self):
+        CTkMessagebox(title='Info', message='Not implemented yet')

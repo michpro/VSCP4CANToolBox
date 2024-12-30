@@ -15,11 +15,15 @@ class Application(ctk.CTk): # pylint: disable=too-few-public-methods
         super().__init__()
         self.width = 1552
         self.height = 700
-        self.version = '0.7'
+        self.version = '0.8'
 
         current_path = os.path.dirname(os.path.realpath(__file__))
         icon_dir = os.path.join(current_path, 'icons')
         icon_path = os.path.join(icon_dir, 'vscp_logo.ico')
+        font_dir = os.path.join(current_path, 'fonts')
+        font_path = os.path.join(font_dir, 'Courier Condensed Regular.ttf')
+        ctk.FontManager.load_font(font_path)
+
 
         if platform.system() == 'Windows':
             appid = 'MProVSCPToolBox'

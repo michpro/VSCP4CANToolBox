@@ -74,6 +74,77 @@ class Dictionary:
         return search(var, 'class', 'types', self.get()) or []
 
 
+    def parse_data(self, class_id: int, type_id: int, data: list) -> list:
+        data_descr = self._get_data_description(class_id, type_id)
+        description = data_descr['str'] if 'str' in data_descr else ''
+        result = [[description, '']]
+        if 'dlc' in data_descr:
+            idx = 0
+            for itr in range(len(data_descr['dlc'])):
+                data_len = data_descr['dlc'][itr]['l']
+                data_type = data_descr['dlc'][itr]['t']
+                data_str = data_descr['dlc'][itr]['d']
+                value_str = self._convert(data_type, data[idx:(idx + data_len)])
+                result.append([data_str, value_str])
+                idx += data_len
+        return result
+
+
+    def _get_data_description(self, class_id: int, type_id: int) -> dict:
+        result = search(type_id, 'id', 'descr', self.class_types(class_id))
+        if not isinstance(result, dict):
+            result = {}
+        return result
+
+
+    def _convert(self, data_type: str, data: list) -> str:
+        match data_type:
+            case 'int':
+                try:
+                    val = int.from_bytes(data, 'big', signed=True)
+                except ValueError:
+                    val = 0
+                result = f'{val}'
+            case 'uint':
+                try:
+                    val = int.from_bytes(data, 'big', signed=False)
+                except ValueError:
+                    val = 0
+                result = f'{val}'
+            case 'hexint':
+                try:
+                    val = int.from_bytes(data, 'big', signed=False)
+                except ValueError:
+                    val = 0
+                width = 2 * len(data)
+                result = f'0x{val:0{width}X}'
+            case 'float':
+                try:
+                    val = memoryview(bytearray(data)).cast('d')[0]
+                except ValueError:
+                    val = 0.0
+                result = f'{val:.7G}'
+            case 'dtime1':
+                try:
+                    val = int.from_bytes(data, 'big') & 0x0000003FFFFFFFFF
+                    year   = val >> 26 & 0x0FFF
+                    month  = val >> 22 & 0x0F
+                    day    = val >> 17 & 0x1F
+                    hour   = val >> 12 & 0x1F
+                    minute = val >> 6  & 0x3F
+                    second = val >> 0  & 0x3F
+                    result = f'{year:04d}-{month:02d}-{day:02d} {hour:02d}:{minute:02d}:{second:02d}'
+                except ValueError:
+                    result = '0000-00-00 00:00:00'
+            case 'raw':
+                result = ' '.join(f'0x{val:02X}' for val in data) if 0 != len(data) else ''
+            case 'ascii':
+                result = ''.join([chr(val) for val in data])
+            case _:
+                result = ''
+        return result
+
+
 _vscp_priority = [
     {'name': 'Highest',     'id': 0},
     {'name': 'Even higher', 'id': 1},
@@ -116,8 +187,13 @@ _class_1_protocol = [
     {'type': 'HIGH_END_SERVER_RESPONSE',            'id': 28,   'descr': {}},  # High end server/service response.
     {'type': 'INCREMENT_REGISTER',                  'id': 29,   'descr': {}},  # Increment register.
     {'type': 'DECREMENT_REGISTER',                  'id': 30,   'descr': {}},  # Decrement register.
-    {'type': 'WHO_IS_THERE',                        'id': 31,   'descr': {}},  # Who is there?
-    {'type': 'WHO_IS_THERE_RESPONSE',               'id': 32,   'descr': {}},  # Who is there response.
+    {'type': 'WHO_IS_THERE',                        'id': 31,   'descr': {'str': 'Who is there?',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Node-ID'}}
+                                                                         }},   # Who is there?
+    {'type': 'WHO_IS_THERE_RESPONSE',               'id': 32,   'descr': {'str': 'Who is there response',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Chunk index'},
+                                                                                  1: {'l': 7, 't': 'raw', 'd': 'Chunk data'}}
+                                                                         }},   # Who is there response.
     {'type': 'GET_MATRIX_INFO',                     'id': 33,   'descr': {}},  # Get decision matrix info.
     {'type': 'GET_MATRIX_INFO_RESPONSE',            'id': 34,   'descr': {}},  # Decision matrix info response.
     {'type': 'GET_EMBEDDED_MDF',                    'id': 35,   'descr': {}},  # Get embedded MDF.
@@ -290,7 +366,11 @@ _class_1_information = [
     {'type': 'TERMINATING',                         'id': 6,    'descr': {}},  # Terminating
     {'type': 'OPENED',                              'id': 7,    'descr': {}},  # Opened
     {'type': 'CLOSED',                              'id': 8,    'descr': {}},  # Closed
-    {'type': 'NODE_HEARTBEAT',                      'id': 9,    'descr': {}},  # Node Heartbeat
+    {'type': 'NODE_HEARTBEAT',                      'id': 9,    'descr': {'str': 'Node Heartbeat',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},  # Node Heartbeat
     {'type': 'BELOW_LIMIT',                         'id': 10,   'descr': {}},  # Below limit
     {'type': 'ABOVE_LIMIT',                         'id': 11,   'descr': {}},  # Above limit
     {'type': 'PULSE',                               'id': 12,   'descr': {}},  # Pulse
@@ -358,7 +438,12 @@ _class_1_information = [
     {'type': 'WEEKDAY',                             'id': 74,   'descr': {}},  # Weekday
     {'type': 'LOCK',                                'id': 75,   'descr': {}},  # Lock
     {'type': 'UNLOCK',                              'id': 76,   'descr': {}},  # Unlock
-    {'type': 'DATETIME',                            'id': 77,   'descr': {}},  # DateTime
+    {'type': 'DATETIME',                            'id': 77,   'descr': {'str': 'DateTime',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Device index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'dtime1', 'd': 'Date/Time'}}
+                                                                         }},   # DateTime
     {'type': 'RISING',                              'id': 78,   'descr': {}},  # Rising
     {'type': 'FALLING',                             'id': 79,   'descr': {}},  # Falling
     {'type': 'UPDATED',                             'id': 80,   'descr': {}},  # Updated

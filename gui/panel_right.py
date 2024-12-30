@@ -1,10 +1,13 @@
 # pylint: disable=missing-module-docstring, missing-class-docstring, missing-function-docstring
 # pylint: disable=line-too-long, too-many-ancestors
 
+import os
 import csv
 import customtkinter as ctk
 from CTkMessagebox import CTkMessagebox
+from vscp import Dictionary
 from .treeview import CTkTreeview
+from .common import add_event_info_handle, event_info_handle
 from .popup import CTkFloatingWindow
 
 
@@ -27,7 +30,7 @@ class Messages(ctk.CTkFrame):
         self.messages.pack(padx=2, pady=2, fill='both', expand=True)
         self.messages.treeview.bind('<Double-Button-1>', self.item_deselect)
         self.messages.treeview.bind('<Button-3>', lambda event: self._show_menu(event, self.dropdown))
-
+        self.messages.treeview.bind('<<TreeviewSelect>>', self._parse_msg_data)
         self.dropdown = CTkFloatingWindow(self.widget)
         self.dropdown_bt_clear_all = ctk.CTkButton(self.dropdown.frame, border_spacing=0, corner_radius=0,
                                                    text="Clear all items", command=self._clear_all_items)
@@ -38,6 +41,14 @@ class Messages(ctk.CTkFrame):
         self.dropdown_bt_save_log = ctk.CTkButton(self.dropdown.frame, border_spacing=0, corner_radius=0,
                                                   text="Save log to file", command=self._save_log)
         self.dropdown_bt_save_log.pack(expand=True, fill="x", padx=0, pady=0)
+
+
+    def _parse_msg_data(self, _):
+        values = []
+        selected_rows = self.messages.treeview.selection()
+        if 1 == len(selected_rows):
+            values = self.messages.treeview.item(selected_rows[0])['values']
+        event_info_handle().display(values)
 
 
     def insert(self, row_data):
@@ -88,14 +99,44 @@ class Messages(ctk.CTkFrame):
             menu.grab_release()
 
 
-class RightPanel(ctk.CTkFrame):
+class EventInfo(ctk.CTkFrame): # pylint: disable=too-few-public-methods
     def __init__(self, parent):
-        super().__init__(parent)
+        self.parent = parent
+        self.dictionary = Dictionary()
+        super().__init__(self.parent)
 
-        self.widget = ctk.CTkFrame(parent, corner_radius=0)
+        font = ctk.CTkFont(family='Courier Condensed', size=16)
+        self.event_info = ctk.CTkTextbox(self.parent, font=font, border_spacing=1, width=460, fg_color=self._fg_color)
+        self.event_info.pack(padx=(5, 0), pady=(5, 5), side='top', anchor='nw', fill='y', expand=False)
+
+
+    def display(self, data: list) -> None:
+        self.event_info.delete('1.0', 'end')
+        if 0 != len(data):
+            class_id = self.dictionary.class_id(data[4])
+            type_id = self.dictionary.type_id(class_id, data[5])
+            dlc = [int(val, 0) for val in data[6].split()]
+            info = self.dictionary.parse_data(class_id, type_id, dlc)
+            val = ''
+            for idx, item in enumerate(info):
+                val += item[0].ljust(16)[:16] if 0 != idx else item[0] + os.linesep
+                if 0 != idx:
+                    val += item[1] + os.linesep
+            self.event_info.insert('end', val)
+
+
+class RightPanel(ctk.CTkFrame): # pylint: disable=too-few-public-methods
+    def __init__(self, parent):
+        self.parent = parent
+        super().__init__(self.parent)
+
+        self.widget = ctk.CTkFrame(self.parent, corner_radius=0)
         self.widget.pack(fill='both', expand=True)
 
         self.messages = Messages(self.widget)
 
-        self.info = ctk.CTkFrame(self.widget, height=150)
-        self.info.pack(padx=(2, 6), pady=(1, 5), side='top', anchor='s', fill='both', expand=False)
+        self.info_panel = ctk.CTkFrame(self.widget, height=150)
+        self.info_panel.pack(padx=(2, 6), pady=(1, 5), side='top', anchor='s', fill='both', expand=False)
+
+        self.info = EventInfo(self.info_panel)
+        add_event_info_handle(self.info)

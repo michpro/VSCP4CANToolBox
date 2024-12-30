@@ -110,7 +110,6 @@ class Message:
         result = False
         vscp_msg_id = self.prepare_id(msg)
         try:
-            # bus = phy.driver.bus()
             bus = phy.driver.bus
             if bus.state == can.bus.BusState.ACTIVE:
                 bus.send(can.Message(arbitration_id=vscp_msg_id, is_extended_id=True, data=msg['data']))

@@ -2,6 +2,7 @@
 
 _set_scan_widget_state_cb: object = None
 _neighbours_handle: object = None
+_event_info_handle: object = None
 _nodes: dict = {}
 
 def add_set_state_callback(callback) -> None:
@@ -15,15 +16,6 @@ def call_set_scan_widget_state(state) -> None:
         _set_scan_widget_state_cb(state)
 
 
-# def set_state(parent, state):
-#     for child in parent.winfo_children():
-#         wtype = child.winfo_class()
-#         if wtype not in ('Frame', 'Labelframe', 'TFrame', 'TLabelframe'):
-#             child.configure(state=state)
-#         else:
-#             set_state(child, state)
-
-
 def add_neighbours_handle(handle) -> None:
     if isinstance(handle, object):
         global _neighbours_handle # pylint: disable=global-statement
@@ -32,6 +24,16 @@ def add_neighbours_handle(handle) -> None:
 
 def neighbours_handle() -> object:
     return _neighbours_handle
+
+
+def add_event_info_handle(handle) -> None:
+    if isinstance(handle, object):
+        global _event_info_handle # pylint: disable=global-statement
+        _event_info_handle = handle
+
+
+def event_info_handle() -> object:
+    return _event_info_handle
 
 
 def set_node_info(key: int, value: any) -> None:
