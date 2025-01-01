@@ -106,23 +106,28 @@ class EventInfo(ctk.CTkFrame): # pylint: disable=too-few-public-methods
         super().__init__(self.parent)
 
         font = ctk.CTkFont(family='Courier Condensed', size=16)
-        self.event_info = ctk.CTkTextbox(self.parent, font=font, border_spacing=1, width=460, fg_color=self._fg_color)
+        self.event_info = ctk.CTkTextbox(self.parent, font=font, border_spacing=1, width=470, fg_color=self._fg_color)
         self.event_info.pack(padx=(5, 0), pady=(5, 5), side='top', anchor='nw', fill='y', expand=False)
+        self.event_info.bind("<Button-1>", 'break')
+        self.event_info.configure(state='disabled')
 
 
     def display(self, data: list) -> None:
+        self.event_info.configure(state='normal')
         self.event_info.delete('1.0', 'end')
         if 0 != len(data):
+            descr_len = 18
             class_id = self.dictionary.class_id(data[4])
             type_id = self.dictionary.type_id(class_id, data[5])
             dlc = [int(val, 0) for val in data[6].split()]
             info = self.dictionary.parse_data(class_id, type_id, dlc)
             val = ''
             for idx, item in enumerate(info):
-                val += item[0].ljust(16)[:16] if 0 != idx else item[0] + os.linesep
+                val += item[0].ljust(descr_len)[:descr_len] if 0 != idx else item[0] + (os.linesep * 2)
                 if 0 != idx:
                     val += item[1] + os.linesep
             self.event_info.insert('end', val)
+        self.event_info.configure(state='disabled')
 
 
 class RightPanel(ctk.CTkFrame): # pylint: disable=too-few-public-methods
