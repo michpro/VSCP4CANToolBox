@@ -106,7 +106,7 @@ class EventInfo(ctk.CTkFrame): # pylint: disable=too-few-public-methods
         super().__init__(self.parent)
 
         font = ctk.CTkFont(family='Courier Condensed', size=16)
-        self.event_info = ctk.CTkTextbox(self.parent, font=font, border_spacing=1, width=475, fg_color=self._fg_color)
+        self.event_info = ctk.CTkTextbox(self.parent, font=font, border_spacing=1, width=477, fg_color=self._fg_color)
         self.event_info.pack(padx=(5, 0), pady=(5, 5), side='top', anchor='nw', fill='y', expand=False)
         self.event_info.bind("<Button-1>", 'break')
         self.event_info.configure(state='disabled')
