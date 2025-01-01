@@ -1,10 +1,13 @@
 # pylint: disable=line-too-long, missing-module-docstring, missing-class-docstring, missing-function-docstring
 
+import os
+from datetime import datetime
 from functools import singledispatchmethod
 from .utils import search
 
 UNKNOWN_VALUE = 65534
 UNKNOWN_NAME = "UNKNOWN"
+MULTILINE_INDENT = 18
 
 class Dictionary:
     def __init__(self) -> None:
@@ -85,7 +88,8 @@ class Dictionary:
                 data_type = data_descr['dlc'][itr]['t']
                 data_str = data_descr['dlc'][itr]['d']
                 value_str = self._convert(data_type, data[idx:(idx + data_len)])
-                result.append([data_str, value_str])
+                if 0 != len(data) or 'none' == data_type:
+                    result.append([data_str, value_str])
                 idx += data_len
         return result
 
@@ -97,51 +101,217 @@ class Dictionary:
         return result
 
 
+    def _convert_int(self, data: list) -> str:
+        try:
+            val = int.from_bytes(data, 'big', signed=True)
+        except ValueError:
+            val = 0
+        return f'{val}'
+
+
+    def _convert_uint(self, data: list) -> str:
+        try:
+            val = int.from_bytes(data, 'big', signed=False)
+        except ValueError:
+            val = 0
+        return f'{val}'
+
+
+    def _convert_ruint(self, data: list) -> str:
+        try:
+            val = int.from_bytes(data, 'big', signed=False) & 0xFF
+            if 0 == val:
+                val = 256
+            result = f'{val}'
+        except ValueError:
+            result = ''
+        return result
+
+
+    def _convert_hexint(self, data: list) -> str:
+        try:
+            val = int.from_bytes(data, 'big', signed=False)
+        except ValueError:
+            val = 0
+        width = 2 * len(data)
+        return f'0x{val:0{width}X}'
+
+
+    def _convert_float(self, data: list) -> str:
+        data.reverse()
+        try:
+            val = memoryview(bytearray(data)).cast('f')[0]
+        except ValueError:
+            val = 0.0
+        return f'{val:.7G}'
+
+
+    def _convert_double(self, data: list) -> str:
+        data.reverse()
+        try:
+            val = memoryview(bytearray(data)).cast('d')[0]
+        except ValueError:
+            val = 0.0
+        return f'{val:.16G}'
+
+
+    def _convert_dtime0(self, data: list) -> str:
+        try:
+            val = int.from_bytes(data, 'big', signed=False) & 0x00000000FFFFFFFF
+        except ValueError:
+            val = 0
+        return str(datetime.fromtimestamp(val))
+
+
+    def _convert_dtime1(self, data: list) -> str:
+        try:
+            val = int.from_bytes(data, 'big') & 0x0000003FFFFFFFFF
+            year   = val >> 26 & 0x0FFF
+            month  = val >> 22 & 0x0F
+            day    = val >> 17 & 0x1F
+            hour   = val >> 12 & 0x1F
+            minute = val >> 6  & 0x3F
+            second = val >> 0  & 0x3F
+            result = f'{year:04d}-{month:02d}-{day:02d} {hour:02d}:{minute:02d}:{second:02d}'
+        except ValueError:
+            result = '0000-00-00 00:00:00'
+        return result
+
+
+    def _convert_flags0(self, data: list) -> str:
+        try:
+            val = int.from_bytes(data, 'big', signed=False)
+        except ValueError:
+            val = 0
+        result = ''
+        bits = []
+        for idx in range (5, 8):
+            if val & (1 << idx):
+                bits.append(idx)
+        bits_count = len(bits)
+        for idx in range(bits_count):
+            match bits[idx]:
+                case 5:
+                    result += 'Reset device. Keep nickname (ID).'
+                case 6:
+                    result += 'Set persistent storage to default.'
+                case 7:
+                    result += 'Go idle. Do not start up again.'
+                case _:
+                    pass
+            if (idx + 1) < bits_count:
+                result += os.linesep + (' ' * MULTILINE_INDENT)
+        return result
+
+
+    def _convert_flags1(self, data: list) -> str:
+        try:
+            val = int.from_bytes(data, 'big', signed=False)
+        except ValueError:
+            val = 0
+        result = ''
+        bits = []
+        for idx in range (0, 16):
+            if val & (1 << idx):
+                bits.append(idx)
+        results = {
+            0x0F:   'Have VSCP TCP serv. with VCSP link iface',
+            0x0E: 	'Have VSCP UDP server',
+            0x0D: 	'Have VSCP Multicast announce interface',
+            0x0C: 	'Have VSCP raw Ethernet',
+            0x0B: 	'Have Web server',
+            0x0A: 	'Have VSCP Websocket interface ',
+            0x09: 	'Have VSCP REST interface',
+            0x08: 	'Have VSCP Multicast channel support',
+            0x07: 	'Reserved',
+            0x06: 	'IPv6 support',
+            0x05: 	'IPv4 support',
+            0x04: 	'SSL support',
+            0x03: 	'Accepts >=2 concurrent TCP/IP conn.',
+            0x02: 	'Support AES256',
+            0x01: 	'Support AES192',
+            0x00: 	'Support AES128',
+        }
+        bits_count = len(bits)
+        for idx, val in enumerate(reversed(bits)):
+            result += results[val]
+            if (idx + 1) < bits_count:
+                result += os.linesep + (' ' * MULTILINE_INDENT)
+        return result
+
+
+    def _convert_blalgo(self, data: list) -> str:
+        results = {
+            0x00:   'VSCP algorithm',
+            0x01: 	'Microchip PIC algorithm',
+            0x10: 	'Atmel AVR algorithm',
+            0x20: 	'NXP ARM algorithm',
+            0x30: 	'ST ARM algorithm',
+            0x40: 	'Freescale algorithm',
+            0x50: 	'Espressif algorithm',
+            0xFF: 	'No bootloader available',
+        }
+        for key in range(0xF0, 0xFF):
+            results[key] = 'User defined algorithm'
+        try:
+            result = results[int.from_bytes(data, 'big', signed=False)]
+        except (KeyError, ValueError):
+            result = 'Undefined algorithm'
+        return result
+
+
+    def _convert_memtyp(self, data: list) -> str:
+        results = {
+            0x01:   'DATA (EEPROM, MRAM, FRAM)',
+            0x02: 	'CONFIG (CPU configuration)',
+            0x03: 	'RAM',
+            0x04: 	'USERID/GUID etc.',
+            0x05: 	'FUSES',
+            0x06: 	'BOOTLOADER',
+            0xFD: 	'User specified memory area 1',
+            0xFE: 	'User specified memory area 2',
+            0xFF: 	'User specified memory area 3',
+        }
+        try:
+            result = results[int.from_bytes(data, 'big', signed=False)]
+        except (KeyError, ValueError):
+            result = 'Undefined'
+        return result
+
+
+    def _convert_ipv4(self, data: list) -> str:
+        result = 'None' if 4 != len(data) else '.'.join(f'{(val & 0xFF):d}' for val in data)
+        return result
+
+
+    def _convert_raw(self, data: list) -> str:
+        result = ' '.join(f'0x{val:02X}' for val in data) if 0 != len(data) else ''
+        return result
+
+
+    def _convert_ascii(self, data: list) -> str:
+        result = ''.join([chr(val) for val in data])
+        return result
+
+
     def _convert(self, data_type: str, data: list) -> str:
-        match data_type:
-            case 'int':
-                try:
-                    val = int.from_bytes(data, 'big', signed=True)
-                except ValueError:
-                    val = 0
-                result = f'{val}'
-            case 'uint':
-                try:
-                    val = int.from_bytes(data, 'big', signed=False)
-                except ValueError:
-                    val = 0
-                result = f'{val}'
-            case 'hexint':
-                try:
-                    val = int.from_bytes(data, 'big', signed=False)
-                except ValueError:
-                    val = 0
-                width = 2 * len(data)
-                result = f'0x{val:0{width}X}'
-            case 'float':
-                try:
-                    val = memoryview(bytearray(data)).cast('d')[0]
-                except ValueError:
-                    val = 0.0
-                result = f'{val:.7G}'
-            case 'dtime1':
-                try:
-                    val = int.from_bytes(data, 'big') & 0x0000003FFFFFFFFF
-                    year   = val >> 26 & 0x0FFF
-                    month  = val >> 22 & 0x0F
-                    day    = val >> 17 & 0x1F
-                    hour   = val >> 12 & 0x1F
-                    minute = val >> 6  & 0x3F
-                    second = val >> 0  & 0x3F
-                    result = f'{year:04d}-{month:02d}-{day:02d} {hour:02d}:{minute:02d}:{second:02d}'
-                except ValueError:
-                    result = '0000-00-00 00:00:00'
-            case 'raw':
-                result = ' '.join(f'0x{val:02X}' for val in data) if 0 != len(data) else ''
-            case 'ascii':
-                result = ''.join([chr(val) for val in data])
-            case _:
-                result = ''
+        func_map = {'int':      self._convert_int,
+                    'uint':     self._convert_uint,
+                    'ruint':    self._convert_ruint,
+                    'hexint':   self._convert_hexint,
+                    'float':    self._convert_float,
+                    'double':   self._convert_double,
+                    'dtime0':   self._convert_dtime0,
+                    'dtime1':   self._convert_dtime1,
+                    'flags0':   self._convert_flags0,
+                    'flags1':   self._convert_flags1,
+                    'blalgo':   self._convert_blalgo,
+                    'memtyp':   self._convert_memtyp,
+                    'ipv4':     self._convert_ipv4,
+                    'raw':      self._convert_raw,
+                    'ascii':    self._convert_ascii,
+                   }
+        result = func_map[data_type](data) if data_type in func_map else ''
         return result
 
 
@@ -156,60 +326,188 @@ _vscp_priority = [
     {'name': 'Lowest',      'id': 7}
 ]
 _class_1_protocol = [
-    {'type': 'GENERAL',                             'id': 0,    'descr': {}},  # General event.
-    {'type': 'SEGCTRL_HEARTBEAT',                   'id': 1,    'descr': {}},  # Segment Controller Heartbeat.
-    {'type': 'NEW_NODE_ONLINE',                     'id': 2,    'descr': {}},  # New node on line / Probe.
-    {'type': 'PROBE_ACK',                           'id': 3,    'descr': {}},  # Probe ACK.
-    {'type': 'RESERVED4',                           'id': 4,    'descr': {}},  # Reserved for future use.
-    {'type': 'RESERVED5',                           'id': 5,    'descr': {}},  # Reserved for future use.
-    {'type': 'SET_NICKNAME',                        'id': 6,    'descr': {}},  # Set nickname-ID for node.
-    {'type': 'NICKNAME_ACCEPTED',                   'id': 7,    'descr': {}},  # Nickname-ID accepted.
-    {'type': 'DROP_NICKNAME',                       'id': 8,    'descr': {}},  # Drop nickname-ID / Reset Device.
-    {'type': 'READ_REGISTER',                       'id': 9,    'descr': {}},  # Read register.
-    {'type': 'RW_RESPONSE',                         'id': 10,   'descr': {}},  # Read/Write response.
-    {'type': 'WRITE_REGISTER',                      'id': 11,   'descr': {}},  # Write register.
-    {'type': 'ENTER_BOOT_LOADER',                   'id': 12,   'descr': {}},  # Enter boot loader mode.
-    {'type': 'ACK_BOOT_LOADER',                     'id': 13,   'descr': {}},  # ACK boot loader mode.
-    {'type': 'NACK_BOOT_LOADER',                    'id': 14,   'descr': {}},  # NACK boot loader mode.
-    {'type': 'START_BLOCK',                         'id': 15,   'descr': {}},  # Start block data transfer.
-    {'type': 'BLOCK_DATA',                          'id': 16,   'descr': {}},  # Block data.
-    {'type': 'BLOCK_DATA_ACK',                      'id': 17,   'descr': {}},  # ACK data block.
-    {'type': 'BLOCK_DATA_NACK',                     'id': 18,   'descr': {}},  # NACK data block.
-    {'type': 'PROGRAM_BLOCK_DATA',                  'id': 19,   'descr': {}},  # Program data block.
-    {'type': 'PROGRAM_BLOCK_DATA_ACK',              'id': 20,   'descr': {}},  # ACK program data block.
-    {'type': 'PROGRAM_BLOCK_DATA_NACK',             'id': 21,   'descr': {}},  # NACK program data block.
-    {'type': 'ACTIVATE_NEW_IMAGE',                  'id': 22,   'descr': {}},  # Activate new image.
-    {'type': 'RESET_DEVICE',                        'id': 23,   'descr': {}},  # GUID drop nickname-ID / reset device.
-    {'type': 'PAGE_READ',                           'id': 24,   'descr': {}},  # Page read.
-    {'type': 'PAGE_WRITE',                          'id': 25,   'descr': {}},  # Page write.
-    {'type': 'RW_PAGE_RESPONSE',                    'id': 26,   'descr': {}},  # Read/Write page response.
-    {'type': 'HIGH_END_SERVER_PROBE',               'id': 27,   'descr': {}},  # High end server/service probe.
-    {'type': 'HIGH_END_SERVER_RESPONSE',            'id': 28,   'descr': {}},  # High end server/service response.
-    {'type': 'INCREMENT_REGISTER',                  'id': 29,   'descr': {}},  # Increment register.
-    {'type': 'DECREMENT_REGISTER',                  'id': 30,   'descr': {}},  # Decrement register.
+    {'type': 'GENERAL',                             'id': 0,    'descr': {}},   # General event.
+    {'type': 'SEGCTRL_HEARTBEAT',                   'id': 1,    'descr': {'str': 'Segment Controller Heartbeat',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Segment GUID CRC'},
+                                                                                  1: {'l': 4, 't': 'dtime0', 'd': 'Date/Time'}}
+                                                                         }},    # Segment Controller Heartbeat.
+    {'type': 'NEW_NODE_ONLINE',                     'id': 2,    'descr': {'str': 'New node on line / Probe',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Target nickname'}}
+                                                                         }},    # New node on line / Probe.
+    {'type': 'PROBE_ACK',                           'id': 3,    'descr': {'str': 'Probe ACK',
+                                                                          'dlc': {0: {'l': 0, 't': 'none', 'd': 'no arguments'}}
+                                                                         }},    # Probe ACK.
+    {'type': 'RESERVED4',                           'id': 4,    'descr': {}},   # Reserved for future use.
+    {'type': 'RESERVED5',                           'id': 5,    'descr': {}},   # Reserved for future use.
+    {'type': 'SET_NICKNAME',                        'id': 6,    'descr': {'str': 'Set nickname-ID for node',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Old node ID'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'New node ID'}}
+                                                                         }},    # Set nickname-ID for node.
+    {'type': 'NICKNAME_ACCEPTED',                   'id': 7,    'descr': {'str': 'New node ID accepted',
+                                                                          'dlc': {0: {'l': 0, 't': 'none', 'd': 'no arguments'}}
+                                                                         }},    # Nickname-ID accepted.
+    {'type': 'DROP_NICKNAME',                       'id': 8,    'descr': {'str': 'Drop node ID / Reset Device',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Current node ID'},
+                                                                                  1: {'l': 1, 't': 'flags0', 'd': 'Flags'},
+                                                                                  2: {'l': 1, 't': 'uint', 'd': 'Action wait time'}}
+                                                                         }},    # Drop nickname-ID / Reset Device.
+    {'type': 'READ_REGISTER',                       'id': 9,    'descr': {'str': 'Read register',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Target node ID'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Register to read'}}
+                                                                         }},    # Read register.
+    {'type': 'RW_RESPONSE',                         'id': 10,   'descr': {'str': 'Read/Write response',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Register address'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Content of reg.'}}
+                                                                         }},    # Read/Write response.
+    {'type': 'WRITE_REGISTER',                      'id': 11,   'descr': {'str': 'Write register',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Target node ID'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Register to write'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'Content of reg.'}}
+                                                                         }},    # Write register.
+    {'type': 'ENTER_BOOT_LOADER',                   'id': 12,   'descr': {'str': 'Enter boot loader mode',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Target node ID'},
+                                                                                  1: {'l': 1, 't': 'blalgo', 'd': 'Boot loader algo.'},
+                                                                                  2: {'l': 4, 't': 'raw', 'd': 'GUID[0][3][5][7]'},
+                                                                                  3: {'l': 2, 't': 'raw', 'd': '#reg.[0x92][0x93]'}}
+                                                                         }},    # Enter boot loader mode.
+    {'type': 'ACK_BOOT_LOADER',                     'id': 13,   'descr': {'str': 'ACK boot loader mode',
+                                                                          'dlc': {0: {'l': 4, 't': 'uint', 'd': 'Flash block size'},
+                                                                                  1: {'l': 4, 't': 'uint', 'd': 'Number of blocks'}}
+                                                                         }},    # ACK boot loader mode.
+    {'type': 'NACK_BOOT_LOADER',                    'id': 14,   'descr': {'str': 'NACK boot loader mode',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Error code'}}
+                                                                         }},    # NACK boot loader mode.
+    {'type': 'START_BLOCK',                         'id': 15,   'descr': {'str': 'Start block data transfer',
+                                                                          'dlc': {0: {'l': 4, 't': 'uint', 'd': 'Block number'},
+                                                                                  1: {'l': 1, 't': 'memtyp', 'd': 'Mem. to wr. type'},
+                                                                                  2: {'l': 1, 't': 'uint', 'd': 'Memory Bank/Image'}}
+                                                                         }},    # Start block data transfer.
+    {'type': 'BLOCK_DATA',                          'id': 16,   'descr': {'str': 'Block data',
+                                                                          'dlc': {0: {'l': 8, 't': 'raw', 'd': 'Data'}}
+                                                                         }},    # Block data.
+    {'type': 'BLOCK_DATA_ACK',                      'id': 17,   'descr': {'str': 'ACK data block',
+                                                                          'dlc': {0: {'l': 2, 't': 'hexint', 'd': 'CRC for block'},
+                                                                                  1: {'l': 4, 't': 'uint', 'd': 'Block number'}}
+                                                                         }},    # ACK data block.
+    {'type': 'BLOCK_DATA_NACK',                     'id': 18,   'descr': {'str': 'NACK data block',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Error code'},
+                                                                                  1: {'l': 4, 't': 'uint', 'd': 'Block number'}}
+                                                                         }},    # NACK data block.
+    {'type': 'PROGRAM_BLOCK_DATA',                  'id': 19,   'descr': {'str': 'Program data block',
+                                                                          'dlc': {0: {'l': 4, 't': 'uint', 'd': 'Block number'}}
+                                                                         }},    # Program data block.
+    {'type': 'PROGRAM_BLOCK_DATA_ACK',              'id': 20,   'descr': {'str': 'ACK program data block',
+                                                                          'dlc': {0: {'l': 4, 't': 'uint', 'd': 'Block number'}}
+                                                                         }},    # ACK program data block.
+    {'type': 'PROGRAM_BLOCK_DATA_NACK',             'id': 21,   'descr': {'str': 'NACK program data block',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Error code'},
+                                                                                  1: {'l': 4, 't': 'uint', 'd': 'Block number'}}
+                                                                         }},    # NACK program data block.
+    {'type': 'ACTIVATE_NEW_IMAGE',                  'id': 22,   'descr': {'str': 'Activate new image',
+                                                                          'dlc': {0: {'l': 2, 't': 'hexint', 'd': 'CRC of all blocks'}}
+                                                                         }},    # Activate new image.
+    {'type': 'RESET_DEVICE',                        'id': 23,   'descr': {'str': 'GUID drop node ID & reset device',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 4, 't': 'raw', 'd': 'GUID bytes 15..0'}}
+                                                                         }},    # GUID drop nickname-ID / reset device.
+    {'type': 'PAGE_READ',                           'id': 24,   'descr': {'str': 'Page read',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Target node ID'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Register to read'},
+                                                                                  2: {'l': 1, 't': 'uint', 'd': 'Numb. regs to rd.'}}
+                                                                         }},    # Page read.
+    {'type': 'PAGE_WRITE',                          'id': 25,   'descr': {'str': 'Page write',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Target node ID'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Register to write'},
+                                                                                  2: {'l': 6, 't': 'raw', 'd': 'Content of reg(s)'}}
+                                                                         }},    # Page write.
+    {'type': 'RW_PAGE_RESPONSE',                    'id': 26,   'descr': {'str': 'Read/Write page response',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Sequence number'},
+                                                                                  1: {'l': 7, 't': 'raw', 'd': 'Data'}}
+                                                                         }},    # Read/Write page response.
+    {'type': 'HIGH_END_SERVER_PROBE',               'id': 27,   'descr': {'str': 'High end server/service probe',
+                                                                          'dlc': {0: {'l': 0, 't': 'none', 'd': 'no arguments'}}
+                                                                         }},    # High end server/service probe.
+    {'type': 'HIGH_END_SERVER_RESPONSE',            'id': 28,   'descr': {'str': 'Page write',
+                                                                          'dlc': {0: {'l': 2, 't': 'flags1', 'd': 'Capability flags'},
+                                                                                  1: {'l': 4, 't': 'ipv4', 'd': 'Server IP address'},
+                                                                                  2: {'l': 2, 't': 'uint', 'd': 'Server Port'}}
+                                                                         }},    # High end server/service response.
+    {'type': 'INCREMENT_REGISTER',                  'id': 29,   'descr': {'str': 'Increment register',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Target node ID'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Reg. to increment'}}
+                                                                         }},    # Increment register.
+    {'type': 'DECREMENT_REGISTER',                  'id': 30,   'descr': {'str': 'Decrement register',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Target node ID'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Reg. to decrement'}}
+                                                                         }},    # Decrement register.
     {'type': 'WHO_IS_THERE',                        'id': 31,   'descr': {'str': 'Who is there?',
-                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Node-ID'}}
-                                                                         }},   # Who is there?
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Target node ID'}}
+                                                                         }},    # Who is there?
     {'type': 'WHO_IS_THERE_RESPONSE',               'id': 32,   'descr': {'str': 'Who is there response',
                                                                           'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Chunk index'},
                                                                                   1: {'l': 7, 't': 'raw', 'd': 'Chunk data'}}
-                                                                         }},   # Who is there response.
-    {'type': 'GET_MATRIX_INFO',                     'id': 33,   'descr': {}},  # Get decision matrix info.
-    {'type': 'GET_MATRIX_INFO_RESPONSE',            'id': 34,   'descr': {}},  # Decision matrix info response.
-    {'type': 'GET_EMBEDDED_MDF',                    'id': 35,   'descr': {}},  # Get embedded MDF.
-    {'type': 'GET_EMBEDDED_MDF_RESPONSE',           'id': 36,   'descr': {}},  # Embedded MDF response.
-    {'type': 'EXTENDED_PAGE_READ',                  'id': 37,   'descr': {}},  # Extended page read register.
-    {'type': 'EXTENDED_PAGE_WRITE',                 'id': 38,   'descr': {}},  # Extended page write register.
-    {'type': 'EXTENDED_PAGE_RESPONSE',              'id': 39,   'descr': {}},  # Extended page read/write response.
-    {'type': 'GET_EVENT_INTEREST',                  'id': 40,   'descr': {}},  # Get event interest.
-    {'type': 'GET_EVENT_INTEREST_RESPONSE',         'id': 41,   'descr': {}},  # Get event interest response.
-    {'type': 'ACTIVATE_NEW_IMAGE_ACK',              'id': 48,   'descr': {}},  # Activate new image ACK.
-    {'type': 'ACTIVATE_NEW_IMAGE_NACK',             'id': 49,   'descr': {}},  # Activate new image NACK.
-    {'type': 'START_BLOCK_ACK',                     'id': 50,   'descr': {}},  # Block data transfer ACK.
-    {'type': 'START_BLOCK_NACK',                    'id': 51,   'descr': {}},  # Block data transfer NACK.
-    {'type': 'BLOCK_CHUNK_ACK',                     'id': 52,   'descr': {}},  # Block Data Chunk ACK.
-    {'type': 'BLOCK_CHUNK_NACK',                    'id': 53,   'descr': {}},  # Block Data Chunk NACK.
-    {'type': 'BOOT_LOADER_CHECK',                   'id': 54,   'descr': {}},  # Bootloader CHECK.
+                                                                         }},    # Who is there response.
+    {'type': 'GET_MATRIX_INFO',                     'id': 33,   'descr': {'str': 'Get decision matrix info',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Target node ID'}}
+                                                                         }},    # Get decision matrix info.
+    {'type': 'GET_MATRIX_INFO_RESPONSE',            'id': 34,   'descr': {'str': 'Decision matrix info response',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Matrix size'},
+                                                                                  1: {'l': 1, 't': 'uint', 'd': 'Reg. space offset'},
+                                                                                  2: {'l': 2, 't': 'uint', 'd': 'Page start'},
+                                                                                  3: {'l': 2, 't': 'uint', 'd': 'Page end'}}
+                                                                         }},    # Decision matrix info response.
+    {'type': 'GET_EMBEDDED_MDF',                    'id': 35,   'descr': {'str': 'Get embedded MDF',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Target node ID'}}
+                                                                         }},    # Get embedded MDF.
+    {'type': 'GET_EMBEDDED_MDF_RESPONSE',           'id': 36,   'descr': {'str': 'Embedded MDF response',
+                                                                          'dlc': {0: {'l': 2, 't': 'uint', 'd': 'Chunk index'},
+                                                                                  1: {'l': 6, 't': 'raw', 'd': 'Chunk data'}}
+                                                                         }},    # Embedded MDF response.
+    {'type': 'EXTENDED_PAGE_READ',                  'id': 37,   'descr': {'str': 'Extended page read register(s)',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Target node ID'},
+                                                                                  1: {'l': 2, 't': 'uint', 'd': 'Reg. page addr.'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'Register to read'},
+                                                                                  3: {'l': 1, 't': 'ruint', 'd': 'Numb. regs to rd.'}}
+                                                                         }},    # Extended page read register.
+    {'type': 'EXTENDED_PAGE_WRITE',                 'id': 38,   'descr': {'str': 'Extended page write register(s)',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Target node ID'},
+                                                                                  1: {'l': 2, 't': 'uint', 'd': 'Reg. page addr.'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'Register to write'},
+                                                                                  3: {'l': 4, 't': 'raw', 'd': 'Content of reg(s)'}}
+                                                                         }},    # Extended page write register.
+    {'type': 'EXTENDED_PAGE_RESPONSE',              'id': 39,   'descr': {'str': 'Extended page read/write response',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 2, 't': 'uint', 'd': 'Reg. page addr.'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'Reg. read/written'},
+                                                                                  3: {'l': 4, 't': 'raw', 'd': 'Content of reg(s)'}}
+                                                                         }},    # Extended page read/write response.
+    {'type': 'GET_EVENT_INTEREST',                  'id': 40,   'descr': {}},   # Get event interest.
+    {'type': 'GET_EVENT_INTEREST_RESPONSE',         'id': 41,   'descr': {'str': 'Get event interest response',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 2, 't': 'hexint', 'd': 'VSCP class ID'},
+                                                                                  2: {'l': 2, 't': 'hexint', 'd': 'VSCP type ID'}}
+                                                                         }},    # Get event interest response.
+    {'type': 'ACTIVATE_NEW_IMAGE_ACK',              'id': 48,   'descr': {'str': 'Activate new image ACK',
+                                                                          'dlc': {0: {'l': 0, 't': 'none', 'd': 'no arguments'}}
+                                                                         }},    # Activate new image ACK.
+    {'type': 'ACTIVATE_NEW_IMAGE_NACK',             'id': 49,   'descr': {'str': 'Activate new image NACK',
+                                                                          'dlc': {0: {'l': 0, 't': 'none', 'd': 'no arguments'}}
+                                                                         }},    # Activate new image NACK.
+    {'type': 'START_BLOCK_ACK',                     'id': 50,   'descr': {'str': 'Start Block ACK',
+                                                                          'dlc': {0: {'l': 0, 't': 'none', 'd': 'no arguments'}}
+                                                                         }},    # Block data transfer ACK.
+    {'type': 'START_BLOCK_NACK',                    'id': 51,   'descr': {'str': 'Start Block NACK',
+                                                                          'dlc': {0: {'l': 0, 't': 'none', 'd': 'no arguments'}}
+                                                                         }},    # Block data transfer NACK.
+    {'type': 'BLOCK_CHUNK_ACK',                     'id': 52,   'descr': {'str': 'Block Data Chunk ACK',
+                                                                          'dlc': {0: {'l': 0, 't': 'none', 'd': 'no arguments'}}
+                                                                         }},    # Block Data Chunk ACK.
+    {'type': 'BLOCK_CHUNK_NACK',                    'id': 53,   'descr': {'str': 'Block Data Chunk NACK',
+                                                                          'dlc': {0: {'l': 0, 't': 'none', 'd': 'no arguments'}}
+                                                                         }},    # Block Data Chunk NACK.
+    {'type': 'BOOT_LOADER_CHECK',                   'id': 54,   'descr': {'str': 'Bootloader CHECK',
+                                                                          'dlc': {0: {'l': 0, 't': 'none', 'd': 'no arguments'}}
+                                                                         }},    # Bootloader CHECK.
 ]
 _class_1_alarm = [
     {'type': 'GENERAL',                             'id': 0,    'descr': {}},  # General event
