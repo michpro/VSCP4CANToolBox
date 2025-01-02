@@ -481,7 +481,9 @@ _class_1_protocol = [
                                                                                   2: {'l': 1, 't': 'hexint', 'd': 'Reg. read/written'},
                                                                                   3: {'l': 4, 't': 'raw', 'd': 'Content of reg(s)'}}
                                                                          }},    # Extended page read/write response.
-    {'type': 'GET_EVENT_INTEREST',                  'id': 40,   'descr': {}},   # Get event interest.
+    {'type': 'GET_EVENT_INTEREST',                  'id': 40,   'descr': {'str': 'Get event interest',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Target node ID'}}
+                                                                         }},   # Get event interest.
     {'type': 'GET_EVENT_INTEREST_RESPONSE',         'id': 41,   'descr': {'str': 'Get event interest response',
                                                                           'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
                                                                                   1: {'l': 2, 't': 'hexint', 'd': 'VSCP class ID'},
