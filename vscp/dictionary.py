@@ -178,6 +178,50 @@ class Dictionary:
         return result
 
 
+    def _convert_date_ymd(self, data: list) -> str:
+        result = '0000-00-00'
+        if 4 == len(data):
+            try:
+                year = int(int.from_bytes(data[:2], 'big', signed=False))
+                month = int(data[2])
+                day = int(data[3])
+                result = f'{year:04d}-{month:02d}-{day:02d}'
+            except ValueError:
+                pass
+        return result
+
+
+    def _convert_timeHMSms(self, data: list) -> str:
+        result = '00:00:00.000'
+        if 5 == len(data):
+            try:
+                hour = int(data[0], 'big', signed=False))
+                minute = int(data[1])
+                second = int(data[2])
+                millisecond = int(int.from_bytes(data[3:], 'big', signed=False))
+                result = f'{hour:02d}:{minute:02d}:{second:02d}.{millisecond:03d}'
+            except ValueError:
+                pass
+        return result
+
+
+    def _convert_weekday(self, data: list) -> str:
+        weekdays = {
+            0: 'Monday',
+            1: 'Tuesday',
+            2: 'Wednesday',
+            3: 'Thursday',
+            4: 'Friday',
+            5: 'Saturday',
+            6: 'Sunday'
+        }
+        try:
+            result = weekdays[data[0]]
+        except (KeyError, ValueError):
+            result = 'Unknown'
+        return result
+
+
     def _convert_flags0(self, data: list) -> str:
         try:
             val = int.from_bytes(data, 'big', signed=False)
@@ -279,6 +323,77 @@ class Dictionary:
         return result
 
 
+    def _convert_evbutton(self, data: list) -> str:
+        result = ''
+        try:
+            val = int(data) & 0xFF
+        except ValueError:
+            val = 0
+        if val & 0x02:
+            result += 'Pressed '
+        if val & 0x01:
+            result += 'Released '
+        if val & 0x04:
+            result += 'Clicked '
+        if 0 != val:
+            result += f'# {(val >> 3):d} times'
+        return result
+
+
+    def _convert_evtoken(self, data: list) -> str:
+        result = ''
+        event_codes = {
+            0: 	'Touched-released',
+            1: 	'Touched',
+            2: 	'Released',
+            3:  'Reserved'
+        }
+        token_types = {
+            0:  'Unknown Token 128b',
+            1:  'iButton Token 64b',
+            2:  'RFID Token 64b',
+            3:  'RFID Token 128b',
+            4:  'RFID Token 256b',
+            9:  'ID/Credit card 128b',
+            16: 'Biometric device 256b',
+            17: 'Biometric device 64b',
+            18: 'Bluetooth device 48b',
+            19: 'GSM IMEI code 64b',
+            20: 'GSM IMSI code 64b',
+            21: 'RFID Token 40b',
+            22: 'RFID Token 32b',
+            23: 'RFID Token 24b',
+            24: 'RFID Token 16b',
+            25: 'RFID Token 8b',
+        }
+        reserved = (*range(5, 9), *range(10, 16), *range(26, 64))
+        for key in reserved:
+            token_types[key] = 'Reserved'
+        try:
+            val = int(data[0]) & 0x03
+            result = event_codes[val]
+        except (ValueError, KeyError):
+            result = 'Unknown'
+        result += ' : '
+        try:
+            val = (int(data[0]) >> 2) & 0x3F
+            result += token_types[val]
+        except:
+            result += 'Unknown'
+        return result
+
+
+    def _convert_measurecoding(self, data: list) -> str:
+        return 'Unimplemented'
+
+
+    def _convert_coord(self, data: list) -> str:
+        result = ''
+        if 1 == len(data):
+            result = 'absolute' if 0 != data[0] else 'relative'
+        return result
+
+
     def _convert_ipv4(self, data: list) -> str:
         result = 'None' if 4 != len(data) else '.'.join(f'{(val & 0xFF):d}' for val in data)
         return result
@@ -303,10 +418,17 @@ class Dictionary:
                     'double':   self._convert_double,
                     'dtime0':   self._convert_dtime0,
                     'dtime1':   self._convert_dtime1,
+                    'dateYMD':  self._convert_date_ymd,
+                    'tHMSms':   self._convert_timeHMSms,
+                    'weekday':  self._convert_weekday,
                     'flags0':   self._convert_flags0,
                     'flags1':   self._convert_flags1,
                     'blalgo':   self._convert_blalgo,
                     'memtyp':   self._convert_memtyp,
+                    'evbutt':   self._convert_evbutton,
+                    'evtoken':  self._convert_evtoken,
+                    'meascod':  self._convert_measurecoding,
+                    'coord':    self._convert_coord,
                     'ipv4':     self._convert_ipv4,
                     'raw':      self._convert_raw,
                     'ascii':    self._convert_ascii,
@@ -658,122 +780,537 @@ _class_1_data = [
 ]
 _class_1_information = [
     {'type': 'GENERAL',                             'id': 0,    'descr': {}},  # General event
-    {'type': 'BUTTON',                              'id': 1,    'descr': {}},  # Button
-    {'type': 'MOUSE',                               'id': 2,    'descr': {}},  # Mouse
-    {'type': 'ON',                                  'id': 3,    'descr': {}},  # On
-    {'type': 'OFF',                                 'id': 4,    'descr': {}},  # Off
-    {'type': 'ALIVE',                               'id': 5,    'descr': {}},  # Alive
-    {'type': 'TERMINATING',                         'id': 6,    'descr': {}},  # Terminating
-    {'type': 'OPENED',                              'id': 7,    'descr': {}},  # Opened
-    {'type': 'CLOSED',                              'id': 8,    'descr': {}},  # Closed
+    {'type': 'BUTTON',                              'id': 1,    'descr': {'str': 'Button',
+                                                                          'dlc': {0: {'l': 1, 't': 'evbutt', 'd': 'State / Repeats'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 2, 't': 'uint', 'd': 'Button code'},
+                                                                                  4: {'l': 2, 't': 'uint', 'd': 'Code page'}}
+                                                                         }},    # Button
+    {'type': 'MOUSE',                               'id': 2,    'descr': {'str': 'Mouse',
+                                                                          'dlc': {0: {'l': 1, 't': 'coord', 'd': 'Coordinates type'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 2, 't': 'int', 'd': 'X-coordinate'},
+                                                                                  4: {'l': 2, 't': 'int', 'd': 'Y-coordinate'}}
+                                                                         }},    # Mouse
+    {'type': 'ON',                                  'id': 3,    'descr': {'str': 'On',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # On
+    {'type': 'OFF',                                 'id': 4,    'descr': {'str': 'Off',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Off
+    {'type': 'ALIVE',                               'id': 5,    'descr': {'str': 'Alive',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Alive
+    {'type': 'TERMINATING',                         'id': 6,    'descr': {'str': 'Terminating',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Terminating
+    {'type': 'OPENED',                              'id': 7,    'descr': {'str': 'Opened',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Opened
+    {'type': 'CLOSED',                              'id': 8,    'descr': {'str': 'Closed',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Closed
     {'type': 'NODE_HEARTBEAT',                      'id': 9,    'descr': {'str': 'Node Heartbeat',
                                                                           'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
                                                                                   1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
                                                                                   2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
-                                                                         }},  # Node Heartbeat
-    {'type': 'BELOW_LIMIT',                         'id': 10,   'descr': {}},  # Below limit
-    {'type': 'ABOVE_LIMIT',                         'id': 11,   'descr': {}},  # Above limit
-    {'type': 'PULSE',                               'id': 12,   'descr': {}},  # Pulse
-    {'type': 'ERROR',                               'id': 13,   'descr': {}},  # Error
-    {'type': 'RESUMED',                             'id': 14,   'descr': {}},  # Resumed
-    {'type': 'PAUSED',                              'id': 15,   'descr': {}},  # Paused
-    {'type': 'SLEEP',                               'id': 16,   'descr': {}},  # Sleeping
-    {'type': 'GOOD_MORNING',                        'id': 17,   'descr': {}},  # Good morning
-    {'type': 'GOOD_DAY',                            'id': 18,   'descr': {}},  # Good day
-    {'type': 'GOOD_AFTERNOON',                      'id': 19,   'descr': {}},  # Good afternoon
-    {'type': 'GOOD_EVENING',                        'id': 20,   'descr': {}},  # Good evening
-    {'type': 'GOOD_NIGHT',                          'id': 21,   'descr': {}},  # Good night
-    {'type': 'SEE_YOU_SOON',                        'id': 22,   'descr': {}},  # See you soon
-    {'type': 'GOODBYE',                             'id': 23,   'descr': {}},  # Goodbye
-    {'type': 'STOP',                                'id': 24,   'descr': {}},  # Stop
-    {'type': 'START',                               'id': 25,   'descr': {}},  # Start
-    {'type': 'RESET_COMPLETED',                     'id': 26,   'descr': {}},  # ResetCompleted
-    {'type': 'INTERRUPTED',                         'id': 27,   'descr': {}},  # Interrupted
-    {'type': 'PREPARING_TO_SLEEP',                  'id': 28,   'descr': {}},  # PreparingToSleep
-    {'type': 'WOKEN_UP',                            'id': 29,   'descr': {}},  # WokenUp
-    {'type': 'DUSK',                                'id': 30,   'descr': {}},  # Dusk
-    {'type': 'DAWN',                                'id': 31,   'descr': {}},  # Dawn
-    {'type': 'ACTIVE',                              'id': 32,   'descr': {}},  # Active
-    {'type': 'INACTIVE',                            'id': 33,   'descr': {}},  # Inactive
-    {'type': 'BUSY',                                'id': 34,   'descr': {}},  # Busy
-    {'type': 'IDLE',                                'id': 35,   'descr': {}},  # Idle
-    {'type': 'STREAM_DATA',                         'id': 36,   'descr': {}},  # Stream Data
-    {'type': 'TOKEN_ACTIVITY',                      'id': 37,   'descr': {}},  # Token Activity
-    {'type': 'STREAM_DATA_WITH_ZONE',               'id': 38,   'descr': {}},  # Stream Data with zone
-    {'type': 'CONFIRM',                             'id': 39,   'descr': {}},  # Confirm
-    {'type': 'LEVEL_CHANGED',                       'id': 40,   'descr': {}},  # Level Changed
-    {'type': 'WARNING',                             'id': 41,   'descr': {}},  # Warning
-    {'type': 'STATE',                               'id': 42,   'descr': {}},  # State
-    {'type': 'ACTION_TRIGGER',                      'id': 43,   'descr': {}},  # Action Trigger
-    {'type': 'SUNRISE',                             'id': 44,   'descr': {}},  # Sunrise
-    {'type': 'SUNSET',                              'id': 45,   'descr': {}},  # Sunset
-    {'type': 'START_OF_RECORD',                     'id': 46,   'descr': {}},  # Start of record
-    {'type': 'END_OF_RECORD',                       'id': 47,   'descr': {}},  # End of record
-    {'type': 'PRESET_ACTIVE',                       'id': 48,   'descr': {}},  # Pre-set active
-    {'type': 'DETECT',                              'id': 49,   'descr': {}},  # Detect
-    {'type': 'OVERFLOW',                            'id': 50,   'descr': {}},  # Overflow
-    {'type': 'BIG_LEVEL_CHANGED',                   'id': 51,   'descr': {}},  # Big level changed
-    {'type': 'SUNRISE_TWILIGHT_START',              'id': 52,   'descr': {}},  # Civil sunrise twilight time
-    {'type': 'SUNSET_TWILIGHT_START',               'id': 53,   'descr': {}},  # Civil sunset twilight time
-    {'type': 'NAUTICAL_SUNRISE_TWILIGHT_START',     'id': 54,   'descr': {}},  # Nautical sunrise twilight time
-    {'type': 'NAUTICAL_SUNSET_TWILIGHT_START',      'id': 55,   'descr': {}},  # Nautical sunset twilight time
-    {'type': 'ASTRONOMICAL_SUNRISE_TWILIGHT_START', 'id': 56,   'descr': {}},  # Astronomical sunrise twilight time
-    {'type': 'ASTRONOMICAL_SUNSET_TWILIGHT_START',  'id': 57,   'descr': {}},  # Astronomical sunset twilight time
-    {'type': 'CALCULATED_NOON',                     'id': 58,   'descr': {}},  # Calculated Noon
-    {'type': 'SHUTTER_UP',                          'id': 59,   'descr': {}},  # Shutter up
-    {'type': 'SHUTTER_DOWN',                        'id': 60,   'descr': {}},  # Shutter down
-    {'type': 'SHUTTER_LEFT',                        'id': 61,   'descr': {}},  # Shutter left
-    {'type': 'SHUTTER_RIGHT',                       'id': 62,   'descr': {}},  # Shutter right
-    {'type': 'SHUTTER_END_TOP',                     'id': 63,   'descr': {}},  # Shutter reached top end
-    {'type': 'SHUTTER_END_BOTTOM',                  'id': 64,   'descr': {}},  # Shutter reached bottom end
-    {'type': 'SHUTTER_END_MIDDLE',                  'id': 65,   'descr': {}},  # Shutter reached middle end
-    {'type': 'SHUTTER_END_PRESET',                  'id': 66,   'descr': {}},  # Shutter reached preset end
-    {'type': 'SHUTTER_END_LEFT',                    'id': 67,   'descr': {}},  # Shutter reached preset left
-    {'type': 'SHUTTER_END_RIGHT',                   'id': 68,   'descr': {}},  # Shutter reached preset right
-    {'type': 'LONG_CLICK',                          'id': 69,   'descr': {}},  # Long click
-    {'type': 'SINGLE_CLICK',                        'id': 70,   'descr': {}},  # Single click
-    {'type': 'DOUBLE_CLICK',                        'id': 71,   'descr': {}},  # Double click
-    {'type': 'DATE',                                'id': 72,   'descr': {}},  # Date
-    {'type': 'TIME',                                'id': 73,   'descr': {}},  # Time
-    {'type': 'WEEKDAY',                             'id': 74,   'descr': {}},  # Weekday
-    {'type': 'LOCK',                                'id': 75,   'descr': {}},  # Lock
-    {'type': 'UNLOCK',                              'id': 76,   'descr': {}},  # Unlock
-    {'type': 'DATETIME',                            'id': 77,   'descr': {'str': 'DateTime',
+                                                                         }},    # Node Heartbeat
+    {'type': 'BELOW_LIMIT',                         'id': 10,   'descr': {'str': 'Below limit',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Reserved'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Below limit
+    {'type': 'ABOVE_LIMIT',                         'id': 11,   'descr': {'str': 'Above limit',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Reserved'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Above limit
+    {'type': 'PULSE',                               'id': 12,   'descr': {'str': 'Pulse',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Reserved'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Pulse
+    {'type': 'ERROR',                               'id': 13,   'descr': {'str': 'Error',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Reserved'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Error
+    {'type': 'RESUMED',                             'id': 14,   'descr': {'str': 'Resumed',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Reserved'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Resumed
+    {'type': 'PAUSED',                              'id': 15,   'descr': {'str': 'Paused',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Reserved'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Paused
+    {'type': 'SLEEP',                               'id': 16,   'descr': {'str': 'Sleeping',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Reserved'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Sleeping
+    {'type': 'GOOD_MORNING',                        'id': 17,   'descr': {'str': 'Good morning',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Reserved'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Good morning
+    {'type': 'GOOD_DAY',                            'id': 18,   'descr': {'str': 'Good day',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Reserved'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Good day
+    {'type': 'GOOD_AFTERNOON',                      'id': 19,   'descr': {'str': 'Good afternoon',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Reserved'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Good afternoon
+    {'type': 'GOOD_EVENING',                        'id': 20,   'descr': {'str': 'Good evening',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Reserved'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Good evening
+    {'type': 'GOOD_NIGHT',                          'id': 21,   'descr': {'str': 'Good night',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Reserved'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Good night
+    {'type': 'SEE_YOU_SOON',                        'id': 22,   'descr': {'str': 'See you soon',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Reserved'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # See you soon
+    {'type': 'GOODBYE',                             'id': 23,   'descr': {'str': 'Goodbye',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Reserved'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Goodbye
+    {'type': 'STOP',                                'id': 24,   'descr': {'str': 'Stop',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Reserved'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Stop
+    {'type': 'START',                               'id': 25,   'descr': {'str': 'Start',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Reserved'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Start
+    {'type': 'RESET_COMPLETED',                     'id': 26,   'descr': {'str': 'Reset completed',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Reserved'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # ResetCompleted
+    {'type': 'INTERRUPTED',                         'id': 27,   'descr': {'str': 'Interrupted',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Reserved'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Interrupted
+    {'type': 'PREPARING_TO_SLEEP',                  'id': 28,   'descr': {'str': 'Preparing to sleep',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Reserved'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # PreparingToSleep
+    {'type': 'WOKEN_UP',                            'id': 29,   'descr': {'str': 'Woken up',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Reserved'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # WokenUp
+    {'type': 'DUSK',                                'id': 30,   'descr': {'str': 'Dusk',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Reserved'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Dusk
+    {'type': 'DAWN',                                'id': 31,   'descr': {'str': 'Dawn',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Reserved'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Dawn
+    {'type': 'ACTIVE',                              'id': 32,   'descr': {'str': 'Active',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Reserved'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Active
+    {'type': 'INACTIVE',                            'id': 33,   'descr': {'str': 'Inactiv',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Reserved'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Inactive
+    {'type': 'BUSY',                                'id': 34,   'descr': {'str': 'Busy',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Reserved'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Busy
+    {'type': 'IDLE',                                'id': 35,   'descr': {'str': 'Idle',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Reserved'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Idle
+    {'type': 'STREAM_DATA',                         'id': 36,   'descr': {'str': 'Stream Data',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Sequence number'},
+                                                                                  1: {'l': 7, 't': 'raw', 'd': 'Data'}}
+                                                                         }},    # Stream Data
+    {'type': 'TOKEN_ACTIVITY',                      'id': 37,   'descr': {'str': 'Token Activity',
+                                                                          'dlc': {0: {'l': 1, 't': 'evtoken', 'd': 'Event/Token type'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 1, 't': 'uint', 'd': 'Sequence number'},
+                                                                                  4: {'l': 4, 't': 'raw', 'd': 'Data'}}
+                                                                         }},    # Token Activity
+    {'type': 'STREAM_DATA_WITH_ZONE',               'id': 38,   'descr': {'str': 'Stream Data with zone',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  2: {'l': 1, 't': 'uint', 'd': 'Sequence number'},
+                                                                                  3: {'l': 5, 't': 'raw', 'd': 'Data'}}
+                                                                         }},    # Stream Data with zone
+    {'type': 'CONFIRM',                             'id': 39,   'descr': {'str': 'Confirm',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  2: {'l': 1, 't': 'uint', 'd': 'Sequence number'},
+                                                                                  3: {'l': 2, 't': 'hexint', 'd': 'VSCP class ID'},
+                                                                                  4: {'l': 2, 't': 'hexint', 'd': 'VSCP type ID'}}
+                                                                         }},    # Confirm
+    {'type': 'LEVEL_CHANGED',                       'id': 40,   'descr': {'str': 'Level Changed',
+                                                                          'dlc': {0: {'l': 1, 't': 'int', 'd': 'Rel/abs lev. val.'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Level Changed
+    {'type': 'WARNING',                             'id': 41,   'descr': {'str': 'Warning',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Reserved'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Warning
+    {'type': 'STATE',                               'id': 42,   'descr': {'str': 'State',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 1, 't': 'hexint', 'd': 'Changed from'},
+                                                                                  4: {'l': 1, 't': 'hexint', 'd': 'New State'}}
+                                                                         }},    # State
+    {'type': 'ACTION_TRIGGER',                      'id': 43,   'descr': {'str': 'Action trigger',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Action ID'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Action Trigger
+    {'type': 'SUNRISE',                             'id': 44,   'descr': {'str': 'Sunrise',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Sunrise
+    {'type': 'SUNSET',                              'id': 45,   'descr': {'str': 'Sunset',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Sunset
+    {'type': 'START_OF_RECORD',                     'id': 46,   'descr': {'str': 'Start of record',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index for record'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 1, 't': 'uint', 'd': 'Number of frames'}}
+                                                                         }},    # Start of record
+    {'type': 'END_OF_RECORD',                       'id': 47,   'descr': {'str': 'End of record',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index for record'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # End of record
+    {'type': 'PRESET_ACTIVE',                       'id': 48,   'descr': {'str': 'Pre-set active',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 1, 't': 'hexint', 'd': 'Code for pre-set'}}
+                                                                         }},    # Pre-set active
+    {'type': 'DETECT',                              'id': 49,   'descr': {'str': 'Detect',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Detect
+    {'type': 'OVERFLOW',                            'id': 50,   'descr': {'str': 'Overflow',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Overflow
+    {'type': 'BIG_LEVEL_CHANGED',                   'id': 51,   'descr': {'str': 'Big level changed',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'int', 'd': 'Level'}}
+                                                                         }},    # Big level changed
+    {'type': 'SUNRISE_TWILIGHT_START',              'id': 52,   'descr': {'str': 'Civil sunrise twilight time',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Civil sunrise twilight time
+    {'type': 'SUNSET_TWILIGHT_START',               'id': 53,   'descr': {'str': 'Civil sunset twilight time',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Civil sunset twilight time
+    {'type': 'NAUTICAL_SUNRISE_TWILIGHT_START',     'id': 54,   'descr': {'str': 'Nautical sunrise twilight time',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Nautical sunrise twilight time
+    {'type': 'NAUTICAL_SUNSET_TWILIGHT_START',      'id': 55,   'descr': {'str': 'Nautical sunset twilight time',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Nautical sunset twilight time
+    {'type': 'ASTRONOMICAL_SUNRISE_TWILIGHT_START', 'id': 56,   'descr': {'str': 'Astronomical sunrise twilight time',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Astronomical sunrise twilight time
+    {'type': 'ASTRONOMICAL_SUNSET_TWILIGHT_START',  'id': 57,   'descr': {'str': 'Astronomical sunset twilight time',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Astronomical sunset twilight time
+    {'type': 'CALCULATED_NOON',                     'id': 58,   'descr': {'str': 'Calculated Noon',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Reserved'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Calculated Noon
+    {'type': 'SHUTTER_UP',                          'id': 59,   'descr': {'str': 'Shutter up',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Reserved'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Shutter up
+    {'type': 'SHUTTER_DOWN',                        'id': 60,   'descr': {'str': 'Shutter down',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Reserved'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Shutter down
+    {'type': 'SHUTTER_LEFT',                        'id': 61,   'descr': {'str': 'Shutter left',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Reserved'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Shutter left
+    {'type': 'SHUTTER_RIGHT',                       'id': 62,   'descr': {'str': 'Shutter right',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Reserved'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Shutter right
+    {'type': 'SHUTTER_END_TOP',                     'id': 63,   'descr': {'str': 'Shutter reached top end',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Reserved'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Shutter reached top end
+    {'type': 'SHUTTER_END_BOTTOM',                  'id': 64,   'descr': {'str': 'Shutter reached bottom end',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Reserved'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Shutter reached bottom end
+    {'type': 'SHUTTER_END_MIDDLE',                  'id': 65,   'descr': {'str': 'Shutter reached middle end',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Reserved'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Shutter reached middle end
+    {'type': 'SHUTTER_END_PRESET',                  'id': 66,   'descr': {'str': 'Shutter reached preset end',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Reserved'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Shutter reached preset end
+    {'type': 'SHUTTER_END_LEFT',                    'id': 67,   'descr': {'str': 'Shutter reached preset left',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Reserved'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Shutter reached preset left
+    {'type': 'SHUTTER_END_RIGHT',                   'id': 68,   'descr': {'str': 'Shutter reached preset right',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Reserved'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Shutter reached preset right
+    {'type': 'LONG_CLICK',                          'id': 69,   'descr': {'str': 'Long click',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Long click
+    {'type': 'SINGLE_CLICK',                        'id': 70,   'descr': {'str': 'Single click',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Single click
+    {'type': 'DOUBLE_CLICK',                        'id': 71,   'descr': {'str': 'Double click',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Double click
+    {'type': 'DATE',                                'id': 72,   'descr': {'str': 'Date',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 4, 't': 'dateYMD', 'd': 'Date'}}
+                                                                         }},    # Date
+    {'type': 'TIME',                                'id': 73,   'descr': {'str': 'Time',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'tHMSms', 'd': 'Time'}}
+                                                                         }},    # Time
+    {'type': 'WEEKDAY',                             'id': 74,   'descr': {'str': 'Weekday',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 1, 't': 'weekday', 'd': 'Weekday'}}
+                                                                         }},    # Weekday
+    {'type': 'LOCK',                                'id': 75,   'descr': {'str': 'Lock',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Lock
+    {'type': 'UNLOCK',                              'id': 76,   'descr': {'str': 'Unlock',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Unlock
+    {'type': 'DATETIME',                            'id': 77,   'descr': {'str': 'Date & Time',
                                                                           'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Device index'},
                                                                                   1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
                                                                                   2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
                                                                                   3: {'l': 5, 't': 'dtime1', 'd': 'Date/Time'}}
                                                                          }},   # DateTime
-    {'type': 'RISING',                              'id': 78,   'descr': {}},  # Rising
-    {'type': 'FALLING',                             'id': 79,   'descr': {}},  # Falling
-    {'type': 'UPDATED',                             'id': 80,   'descr': {}},  # Updated
-    {'type': 'CONNECT',                             'id': 81,   'descr': {}},  # Connect
-    {'type': 'DISCONNECT',                          'id': 82,   'descr': {}},  # Disconnect
-    {'type': 'RECONNECT',                           'id': 83,   'descr': {}},  # Reconnect
-    {'type': 'ENTER',                               'id': 84,   'descr': {}},  # Enter
-    {'type': 'EXIT',                                'id': 85,   'descr': {}},  # Exit
-    {'type': 'INCREMENTED',                         'id': 86,   'descr': {}},  # Incremented
-    {'type': 'DECREMENTED',                         'id': 87,   'descr': {}},  # Decremented
-    {'type': 'PROXIMITY_DETECTED',                  'id': 88,   'descr': {}},  # Proximity detected
+    {'type': 'RISING',                              'id': 78,   'descr': {'str': 'Rising',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Rising
+    {'type': 'FALLING',                             'id': 79,   'descr': {'str': 'Falling',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Falling
+    {'type': 'UPDATED',                             'id': 80,   'descr': {'str': 'Updated',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Updated
+    {'type': 'CONNECT',                             'id': 81,   'descr': {'str': 'Connect',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Connect
+    {'type': 'DISCONNECT',                          'id': 82,   'descr': {'str': 'Disconnect',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Disconnect
+    {'type': 'RECONNECT',                           'id': 83,   'descr': {'str': 'Reconnect',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Reconnect
+    {'type': 'ENTER',                               'id': 84,   'descr': {'str': 'Enter',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Enter
+    {'type': 'EXIT',                                'id': 85,   'descr': {'str': 'Exit',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Exit
+    {'type': 'INCREMENTED',                         'id': 86,   'descr': {'str': 'Incremented',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'uint', 'd': 'Value'}}
+                                                                         }},    # Incremented
+    {'type': 'DECREMENTED',                         'id': 87,   'descr': {'str': 'Decremented',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'uint', 'd': 'Value'}}
+                                                                         }},    # Decremented
+    {'type': 'PROXIMITY_DETECTED',                  'id': 88,   'descr': {'str': 'Proximity detected',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 2, 't': 'uint', 'd': 'Proximity val.'}}
+                                                                         }},    # Proximity detected
 ]
 _class_1_control = [
     {'type': 'GENERAL',                             'id': 0,    'descr': {}},  # General event
     {'type': 'MUTE',                                'id': 1,    'descr': {}},  # Mute on/off
     {'type': 'ALL_LAMPS',                           'id': 2,    'descr': {}},  # (All) Lamp(s) on/off
-    {'type': 'OPEN',                                'id': 3,    'descr': {}},  # Open
-    {'type': 'CLOSE',                               'id': 4,    'descr': {}},  # Close
-    {'type': 'TURNON',                              'id': 5,    'descr': {}},  # TurnOn
-    {'type': 'TURNOFF',                             'id': 6,    'descr': {}},  # TurnOff
-    {'type': 'START',                               'id': 7,    'descr': {}},  # Start
-    {'type': 'STOP',                                'id': 8,    'descr': {}},  # Stop
-    {'type': 'RESET',                               'id': 9,    'descr': {}},  # Reset
+    {'type': 'OPEN',                                'id': 3,    'descr': {'str': 'Open',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Open
+    {'type': 'CLOSE',                               'id': 4,    'descr': {'str': 'Close',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Close
+    {'type': 'TURNON',                              'id': 5,    'descr': {'str': 'Turn On',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # TurnOn
+    {'type': 'TURNOFF',                             'id': 6,    'descr': {'str': 'Turn Off',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # TurnOff
+    {'type': 'START',                               'id': 7,    'descr': {'str': 'Star',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Start
+    {'type': 'STOP',                                'id': 8,    'descr': {'str': 'Stop',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Stop
+    {'type': 'RESET',                               'id': 9,    'descr': {'str': 'Reset',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Reset
     {'type': 'INTERRUPT',                           'id': 10,   'descr': {}},  # Interrupt
-    {'type': 'SLEEP',                               'id': 11,   'descr': {}},  # Sleep
-    {'type': 'WAKEUP',                              'id': 12,   'descr': {}},  # Wakeup
-    {'type': 'RESUME',                              'id': 13,   'descr': {}},  # Resume
-    {'type': 'PAUSE',                               'id': 14,   'descr': {}},  # Pause
-    {'type': 'ACTIVATE',                            'id': 15,   'descr': {}},  # Activate
-    {'type': 'DEACTIVATE',                          'id': 16,   'descr': {}},  # Deactivate
+    {'type': 'SLEEP',                               'id': 11,   'descr': {'str': 'Sleep',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Sleep
+    {'type': 'WAKEUP',                              'id': 12,   'descr': {'str': 'Wakeup',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Wakeup
+    {'type': 'RESUME',                              'id': 13,   'descr': {'str': 'Resume',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Resume
+    {'type': 'PAUSE',                               'id': 14,   'descr': {'str': 'Pause',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Pause
+    {'type': 'ACTIVATE',                            'id': 15,   'descr': {'str': 'Activate',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Activate
+    {'type': 'DEACTIVATE',                          'id': 16,   'descr': {'str': 'Deactivate',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Deactivate
     {'type': 'RESERVED17',                          'id': 17,   'descr': {}},  # Reserved for future use
     {'type': 'RESERVED18',                          'id': 18,   'descr': {}},  # Reserved for future use
     {'type': 'RESERVED19',                          'id': 19,   'descr': {}},  # Reserved for future use
@@ -786,21 +1323,61 @@ _class_1_control = [
     {'type': 'SYNC',                                'id': 26,   'descr': {}},  # Sync
     {'type': 'ZONED_STREAM_DATA',                   'id': 27,   'descr': {}},  # Zoned Stream Data
     {'type': 'SET_PRESET',                          'id': 28,   'descr': {}},  # Set Pre-set
-    {'type': 'TOGGLE_STATE',                        'id': 29,   'descr': {}},  # Toggle state
+    {'type': 'TOGGLE_STATE',                        'id': 29,   'descr': {'str': 'Toggle state',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Toggle state
     {'type': 'TIMED_PULSE_ON',                      'id': 30,   'descr': {}},  # Timed pulse on
     {'type': 'TIMED_PULSE_OFF',                     'id': 31,   'descr': {}},  # Timed pulse off
     {'type': 'SET_COUNTRY_LANGUAGE',                'id': 32,   'descr': {}},  # Set country/language
     {'type': 'BIG_CHANGE_LEVEL',                    'id': 33,   'descr': {}},  # Big Change level
-    {'type': 'SHUTTER_UP',                          'id': 34,   'descr': {}},  # Move shutter up
-    {'type': 'SHUTTER_DOWN',                        'id': 35,   'descr': {}},  # Move shutter down
-    {'type': 'SHUTTER_LEFT',                        'id': 36,   'descr': {}},  # Move shutter left
-    {'type': 'SHUTTER_RIGHT',                       'id': 37,   'descr': {}},  # Move shutter right
-    {'type': 'SHUTTER_MIDDLE',                      'id': 38,   'descr': {}},  # Move shutter to middle position
-    {'type': 'SHUTTER_PRESET',                      'id': 39,   'descr': {}},  # Move shutter to preset position
-    {'type': 'ALL_LAMPS_ON',                        'id': 40,   'descr': {}},  # (All) Lamp(s) on
-    {'type': 'ALL_LAMPS_OFF',                       'id': 41,   'descr': {}},  # (All) Lamp(s) off
-    {'type': 'LOCK',                                'id': 42,   'descr': {}},  # Lock
-    {'type': 'UNLOCK',                              'id': 43,   'descr': {}},  # Unlock
+    {'type': 'SHUTTER_UP',                          'id': 34,   'descr': {'str': 'Move shutter up',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Move shutter up
+    {'type': 'SHUTTER_DOWN',                        'id': 35,   'descr': {'str': 'Move shutter down',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Move shutter down
+    {'type': 'SHUTTER_LEFT',                        'id': 36,   'descr': {'str': 'Move shutter left',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Move shutter left
+    {'type': 'SHUTTER_RIGHT',                       'id': 37,   'descr': {'str': 'Move shutter right',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Move shutter right
+    {'type': 'SHUTTER_MIDDLE',                      'id': 38,   'descr': {'str': 'Move shutter to middle position',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Move shutter to middle position
+    {'type': 'SHUTTER_PRESET',                      'id': 39,   'descr': {}},    # Move shutter to preset position
+    {'type': 'ALL_LAMPS_ON',                        'id': 40,   'descr': {'str': '(All) Lamp(s) on',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # (All) Lamp(s) on
+    {'type': 'ALL_LAMPS_OFF',                       'id': 41,   'descr': {'str': '(All) Lamp(s) off',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # (All) Lamp(s) off
+    {'type': 'LOCK',                                'id': 42,   'descr': {'str': 'Lock',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Lock
+    {'type': 'UNLOCK',                              'id': 43,   'descr': {'str': 'Unlock',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Unlock
     {'type': 'PWM',                                 'id': 44,   'descr': {}},  # PWM set
     {'type': 'TOKEN_LOCK',                          'id': 45,   'descr': {}},  # Lock with token
     {'type': 'TOKEN_UNLOCK',                        'id': 46,   'descr': {}},  # Unlock with token
@@ -808,7 +1385,11 @@ _class_1_control = [
     {'type': 'SET_SECURITY_PIN',                    'id': 48,   'descr': {}},  # Set security pin
     {'type': 'SET_SECURITY_PASSWORD',               'id': 49,   'descr': {}},  # Set security password
     {'type': 'SET_SECURITY_TOKEN',                  'id': 50,   'descr': {}},  # Set security token
-    {'type': 'REQUEST_SECURITY_TOKEN',              'id': 51,   'descr': {}},  # Request new security token
+    {'type': 'REQUEST_SECURITY_TOKEN',              'id': 51,   'descr': {'str': 'Request new security token',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Request new security token
     {'type': 'INCREMENT',                           'id': 52,   'descr': {}},  # Increment
     {'type': 'DECREMENT',                           'id': 53,   'descr': {}},  # Decrement
 ]
