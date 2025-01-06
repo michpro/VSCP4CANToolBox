@@ -260,21 +260,21 @@ class Dictionary:
                 bits.append(idx)
         results = {
             0x0F:   'Have VSCP TCP serv. with VCSP link iface',
-            0x0E: 	'Have VSCP UDP server',
-            0x0D: 	'Have VSCP Multicast announce interface',
-            0x0C: 	'Have VSCP raw Ethernet',
-            0x0B: 	'Have Web server',
-            0x0A: 	'Have VSCP Websocket interface ',
-            0x09: 	'Have VSCP REST interface',
-            0x08: 	'Have VSCP Multicast channel support',
-            0x07: 	'Reserved',
-            0x06: 	'IPv6 support',
-            0x05: 	'IPv4 support',
-            0x04: 	'SSL support',
-            0x03: 	'Accepts >=2 concurrent TCP/IP conn.',
-            0x02: 	'Support AES256',
-            0x01: 	'Support AES192',
-            0x00: 	'Support AES128',
+            0x0E:   'Have VSCP UDP server',
+            0x0D:   'Have VSCP Multicast announce interface',
+            0x0C:   'Have VSCP raw Ethernet',
+            0x0B:   'Have Web server',
+            0x0A:   'Have VSCP Websocket interface ',
+            0x09:   'Have VSCP REST interface',
+            0x08:   'Have VSCP Multicast channel support',
+            0x07:   'Reserved',
+            0x06:   'IPv6 support',
+            0x05:   'IPv4 support',
+            0x04:   'SSL support',
+            0x03:   'Accepts >=2 concurrent TCP/IP conn.',
+            0x02:   'Support AES256',
+            0x01:   'Support AES192',
+            0x00:   'Support AES128',
         }
         bits_count = len(bits)
         for idx, val in enumerate(reversed(bits)):
@@ -287,13 +287,13 @@ class Dictionary:
     def _convert_blalgo(self, data: list) -> str:
         results = {
             0x00:   'VSCP algorithm',
-            0x01: 	'Microchip PIC algorithm',
-            0x10: 	'Atmel AVR algorithm',
-            0x20: 	'NXP ARM algorithm',
-            0x30: 	'ST ARM algorithm',
-            0x40: 	'Freescale algorithm',
-            0x50: 	'Espressif algorithm',
-            0xFF: 	'No bootloader available',
+            0x01:   'Microchip PIC algorithm',
+            0x10:   'Atmel AVR algorithm',
+            0x20:   'NXP ARM algorithm',
+            0x30:   'ST ARM algorithm',
+            0x40:   'Freescale algorithm',
+            0x50:   'Espressif algorithm',
+            0xFF:   'No bootloader available',
         }
         for key in range(0xF0, 0xFF):
             results[key] = 'User defined algorithm'
@@ -307,20 +307,53 @@ class Dictionary:
     def _convert_memtyp(self, data: list) -> str:
         results = {
             0x01:   'DATA (EEPROM, MRAM, FRAM)',
-            0x02: 	'CONFIG (CPU configuration)',
-            0x03: 	'RAM',
-            0x04: 	'USERID/GUID etc.',
-            0x05: 	'FUSES',
-            0x06: 	'BOOTLOADER',
-            0xFD: 	'User specified memory area 1',
-            0xFE: 	'User specified memory area 2',
-            0xFF: 	'User specified memory area 3',
+            0x02:   'CONFIG (CPU configuration)',
+            0x03:   'RAM',
+            0x04:   'USERID/GUID etc.',
+            0x05:   'FUSES',
+            0x06:   'BOOTLOADER',
+            0xFD:   'User specified memory area 1',
+            0xFE:   'User specified memory area 2',
+            0xFF:   'User specified memory area 3',
         }
         try:
             result = results[int.from_bytes(data, 'big', signed=False)]
         except (KeyError, ValueError):
             result = 'Undefined'
         return result
+
+
+    def _convert_dimtype(self, data: list) -> str:
+        try:
+            val = int(data[0])
+        except ValueError:
+            val = -1
+        if 1 <= val <= 99:
+            result = f'{val:d}'
+        elif 0 == val:
+            result = 'OFF'
+        elif 100 == val:
+            result = 'full ON'
+        elif 254 == val:
+            result = 'dim down one step'
+        elif 255 == val:
+            result = 'dim up one step'
+        else:
+            result = 'Undefined'
+        return result
+
+
+    def _convert_repeattype(self, data: list) -> str:
+        try:
+            val = int(data[0])
+        except ValueError:
+            val = -1
+        if 0 == val:
+            result = 'repeat forever'
+        elif 0 < val:
+            result = f'{val:d}'
+        else:
+            result = 'Unknown'
 
 
     def _convert_evbutton(self, data: list) -> str:
@@ -343,9 +376,9 @@ class Dictionary:
     def _convert_evtoken(self, data: list) -> str:
         result = ''
         event_codes = {
-            0: 	'Touched-released',
-            1: 	'Touched',
-            2: 	'Released',
+            0:  'Touched-released',
+            1:  'Touched',
+            2:  'Released',
             3:  'Reserved'
         }
         token_types = {
@@ -383,8 +416,118 @@ class Dictionary:
         return result
 
 
+    def _convert_onoffstate(self, data: list) -> str:
+        result = ''
+        if 1 == len(data):
+            result = 'ON' if 0 != data[0] else 'OFF'
+        return result
+
+
+    def _convert_timeunit(self, data: list) -> str:
+        time_codes = {
+            0:  'Time in microseconds',
+            1:  'Time in milliseconds',
+            2:  'Time in seconds',
+            3:  'Time in minutes',
+            4:  'Time in hours',
+            5:  'Time in days',
+        }
+        try:
+            val = int(data[0]) & 0x0F
+            result = time_codes[val]
+        except (ValueError, KeyError):
+            result = 'Reserved'
+        return result
+
+
+    def _convert_langcoding(self, data: list) -> str:
+        language_codes = {
+            0:  'Custom coded system',
+            1:  'ISO 639-1',
+            2:  'ISO 639-2/T',
+            3:  'ISO 639-2/B',
+            4:  'ISO 639-3',
+            5:  'IETF (RFC-5646/4647)',
+        }
+        try:
+            val = int(data[0])
+            result = language_codes[val]
+        except (ValueError, KeyError):
+            result = 'Unknown'
+        return result
+
+
+    def _convert_pulsetypecoding(self, data: list) -> str:
+        try:
+            val = int(data[0]) & 0x0F
+            result = self._convert_timeunit(data)
+            bits = []
+            for idx in range (6, 8):
+                if val & (1 << idx):
+                    bits.append(idx)
+            bits_count = len(bits)
+            for idx in range(bits_count):
+                result += os.linesep + (' ' * MULTILINE_INDENT)
+                match bits[idx]:
+                    case 6:
+                        result += 'Send INFO.ON event when pulse goes on'
+                    case 7:
+                        result += 'Send INFO.OFF event when pulse goes off'
+                    case _:
+                        pass
+        except (ValueError, KeyError):
+            result = 'Reserved'
+        return result
+
+
     def _convert_measurecoding(self, data: list) -> str:
         return 'Unimplemented'
+
+
+    def _convert_measureindex(self, data: list) -> str:
+        try:
+            val = int(data[0])
+        except ValueError:
+            val = -1
+        if 0 == val:
+            result = 'all measurements'
+        elif 0 < val:
+            result = f'{val:d}'
+        else:
+            result = 'Undefined'
+        return result
+
+
+    def _convert_sensorindex(self, data: list) -> str:
+        try:
+            val = int(data[0])
+        except ValueError:
+            val = -1
+        if 0xFF == val:
+            result = 'all sensors'
+        elif 0 <= val:
+            result = f'{val:d}'
+        else:
+            result = 'Undefined'
+        return result
+
+
+    def _convert_channeltype(self, data: list) -> str:
+        try:
+            val = int(data[0], )
+        except ValueError:
+            val = -1
+        if 0 <= val <= 127:
+            result = f'{val:d}'
+        elif 128 <= val <= 157:
+            result = f'down by {(val - 127):d}'
+        elif 160 <= val <= 189:
+            result = f'up by {(val - 159):d}'
+        elif 255 == val:
+            result = 'extended'
+        else:
+            result = 'Undefined'
+        return result
 
 
     def _convert_coord(self, data: list) -> str:
@@ -409,6 +552,11 @@ class Dictionary:
         return result
 
 
+    def _convert_utf8(self, data: list) -> str:
+        result = bytes(data).decode('utf-8')
+        return result
+
+
     def _convert(self, data_type: str, data: list) -> str:
         func_map = {'int':      self._convert_int,
                     'uint':     self._convert_uint,
@@ -425,13 +573,23 @@ class Dictionary:
                     'flags1':   self._convert_flags1,
                     'blalgo':   self._convert_blalgo,
                     'memtyp':   self._convert_memtyp,
+                    'dimtype':  self._convert_dimtype,
+                    'reptype':  self._convert_repeattype,
                     'evbutt':   self._convert_evbutton,
                     'evtoken':  self._convert_evtoken,
+                    'onoffst':  self._convert_onoffstate,
+                    'timeunit': self._convert_timeunit,
+                    'langcod':  self._convert_langcoding,
+                    'pulsecod': self._convert_pulsetypecoding,
                     'meascod':  self._convert_measurecoding,
+                    'measidx':  self._convert_measureindex,
+                    'sensidx':  self._convert_sensorindex,
+                    'channt':   self._convert_channeltype,
                     'coord':    self._convert_coord,
                     'ipv4':     self._convert_ipv4,
                     'raw':      self._convert_raw,
                     'ascii':    self._convert_ascii,
+                    'utf8':     self._convert_utf8,
                    }
         result = func_map[data_type](data) if data_type in func_map else ''
         return result
@@ -737,7 +895,7 @@ _class_1_measurement = [
     {'type': 'LUMINANCE',                           'id': 44,   'descr': {}},  # Luminance
     {'type': 'CHEMICAL_CONCENTRATION_MOLAR',        'id': 45,   'descr': {}},  # Chemical (molar) concentration
     {'type': 'CHEMICAL_CONCENTRATION_MASS',         'id': 46,   'descr': {}},  # Chemical (mass) concentration
-    {'type': 'DOSE_EQVIVALENT',                     'id': 47,   'descr': {}},  # Reserved [TODO not reserved]
+    {'type': 'RESERVED47',                          'id': 47,   'descr': {}},  # Reserved
     {'type': 'RESERVED48',                          'id': 48,   'descr': {}},  # Reserved
     {'type': 'DEWPOINT',                            'id': 49,   'descr': {}},  # Dew Point
     {'type': 'RELATIVE_LEVEL',                      'id': 50,   'descr': {}},  # Relative Level
@@ -751,7 +909,7 @@ _class_1_measurement = [
     {'type': 'SOUND_PRESSURE',                      'id': 58,   'descr': {}},  # Sound pressure (acoustic pressure)
     {'type': 'SOUND_DENSITY',                       'id': 59,   'descr': {}},  # Sound energy density
     {'type': 'SOUND_LEVEL',                         'id': 60,   'descr': {}},  # Sound level
-    {'type': 'RADIATION_DOSE_EQ',                   'id': 61,   'descr': {}},  # Radiation dose (equivalent)
+    {'type': 'DOSE_EQVIVALENT',                     'id': 61,   'descr': {}},  # Radiation dose (equivalent)
     {'type': 'RADIATION_DOSE_EXPOSURE',             'id': 62,   'descr': {}},  # Radiation dose (exposure)
     {'type': 'POWER_FACTOR',                        'id': 63,   'descr': {}},  # Power factor
     {'type': 'REACTIVE_POWER',                      'id': 64,   'descr': {}},  # Reactive Power
@@ -779,7 +937,7 @@ _class_1_data = [
     {'type': 'SIGNAL_QUALITY',                      'id': 6,    'descr': {}},  # Signal Quality
 ]
 _class_1_information = [
-    {'type': 'GENERAL',                             'id': 0,    'descr': {}},  # General event
+    {'type': 'GENERAL',                             'id': 0,    'descr': {}},   # General event
     {'type': 'BUTTON',                              'id': 1,    'descr': {'str': 'Button',
                                                                           'dlc': {0: {'l': 1, 't': 'evbutt', 'd': 'State / Repeats'},
                                                                                   1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
@@ -1242,9 +1400,17 @@ _class_1_information = [
                                                                          }},    # Proximity detected
 ]
 _class_1_control = [
-    {'type': 'GENERAL',                             'id': 0,    'descr': {}},  # General event
-    {'type': 'MUTE',                                'id': 1,    'descr': {}},  # Mute on/off
-    {'type': 'ALL_LAMPS',                           'id': 2,    'descr': {}},  # (All) Lamp(s) on/off
+    {'type': 'GENERAL',                             'id': 0,    'descr': {}},   # General event
+    {'type': 'MUTE',                                'id': 1,    'descr': {'str': 'Mute on/off',
+                                                                          'dlc': {0: {'l': 1, 't': 'onoffst', 'd': 'Mute'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Mute on/off
+    {'type': 'ALL_LAMPS',                           'id': 2,    'descr': {'str': '(All) Lamp(s) on/off',
+                                                                          'dlc': {0: {'l': 1, 't': 'onoffst', 'd': 'State'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # (All) Lamp(s) on/off
     {'type': 'OPEN',                                'id': 3,    'descr': {'str': 'Open',
                                                                           'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
                                                                                   1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
@@ -1265,7 +1431,7 @@ _class_1_control = [
                                                                                   1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
                                                                                   2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
                                                                          }},    # TurnOff
-    {'type': 'START',                               'id': 7,    'descr': {'str': 'Star',
+    {'type': 'START',                               'id': 7,    'descr': {'str': 'Start',
                                                                           'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
                                                                                   1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
                                                                                   2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
@@ -1280,13 +1446,17 @@ _class_1_control = [
                                                                                   1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
                                                                                   2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
                                                                          }},    # Reset
-    {'type': 'INTERRUPT',                           'id': 10,   'descr': {}},  # Interrupt
+    {'type': 'INTERRUPT',                           'id': 10,   'descr': {'str': 'Interrupt',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Level'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Interrupt
     {'type': 'SLEEP',                               'id': 11,   'descr': {'str': 'Sleep',
                                                                           'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
                                                                                   1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
                                                                                   2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
                                                                          }},    # Sleep
-    {'type': 'WAKEUP',                              'id': 12,   'descr': {'str': 'Wakeup',
+    {'type': 'WAKEUP',                              'id': 12,   'descr': {'str': 'Wake up',
                                                                           'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
                                                                                   1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
                                                                                   2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
@@ -1311,27 +1481,86 @@ _class_1_control = [
                                                                                   1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
                                                                                   2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
                                                                          }},    # Deactivate
-    {'type': 'RESERVED17',                          'id': 17,   'descr': {}},  # Reserved for future use
-    {'type': 'RESERVED18',                          'id': 18,   'descr': {}},  # Reserved for future use
-    {'type': 'RESERVED19',                          'id': 19,   'descr': {}},  # Reserved for future use
-    {'type': 'DIM_LAMPS',                           'id': 20,   'descr': {}},  # Dim lamp(s)
-    {'type': 'CHANGE_CHANNEL',                      'id': 21,   'descr': {}},  # Change Channel
-    {'type': 'CHANGE_LEVEL',                        'id': 22,   'descr': {}},  # Change Level
-    {'type': 'RELATIVE_CHANGE_LEVEL',               'id': 23,   'descr': {}},  # Relative Change Level
-    {'type': 'MEASUREMENT_REQUEST',                 'id': 24,   'descr': {}},  # Measurement Request
-    {'type': 'STREAM_DATA',                         'id': 25,   'descr': {}},  # Stream Data
-    {'type': 'SYNC',                                'id': 26,   'descr': {}},  # Sync
-    {'type': 'ZONED_STREAM_DATA',                   'id': 27,   'descr': {}},  # Zoned Stream Data
-    {'type': 'SET_PRESET',                          'id': 28,   'descr': {}},  # Set Pre-set
+    {'type': 'RESERVED17',                          'id': 17,   'descr': {}},   # Reserved for future use
+    {'type': 'RESERVED18',                          'id': 18,   'descr': {}},   # Reserved for future use
+    {'type': 'RESERVED19',                          'id': 19,   'descr': {}},   # Reserved for future use
+    {'type': 'DIM_LAMPS',                           'id': 20,   'descr': {'str': 'Dim lamp(s)',
+                                                                          'dlc': {0: {'l': 1, 't': 'dimtype', 'd': 'Value'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Dim lamp(s)
+    {'type': 'CHANGE_CHANNEL',                      'id': 21,   'descr': {'str': 'Change Channel',
+                                                                          'dlc': {0: {'l': 1, 't': 'channt', 'd': 'Channel number'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'uint', 'd': 'Extended'}}
+                                                                         }},    # Change Channel
+    {'type': 'CHANGE_LEVEL',                        'id': 22,   'descr': {'str': 'Change Level',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Absolute level'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Change Level
+    {'type': 'RELATIVE_CHANGE_LEVEL',               'id': 23,   'descr': {'str': 'Relative Change Level',
+                                                                          'dlc': {0: {'l': 1, 't': 'int', 'd': 'Relative level'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Relative Change Level
+    {'type': 'MEASUREMENT_REQUEST',                 'id': 24,   'descr': {'str': 'Measurement Request',
+                                                                          'dlc': {0: {'l': 1, 't': 'measidx', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Measurement Request
+    {'type': 'STREAM_DATA',                         'id': 25,   'descr': {'str': 'Stream Data',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Sequence number'},
+                                                                                  1: {'l': 7, 't': 'raw', 'd': 'Data'}}
+                                                                         }},    # Stream Data
+    {'type': 'SYNC',                                'id': 26,   'descr': {'str': 'Sync',
+                                                                          'dlc': {0: {'l': 1, 't': 'sensidx', 'd': 'Sensor index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Sync
+    {'type': 'ZONED_STREAM_DATA',                   'id': 27,   'descr': {'str': 'Zoned Stream Data',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Sequence number'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'raw', 'd': 'Data'}}
+                                                                         }},    # Zoned Stream Data
+    {'type': 'SET_PRESET',                          'id': 28,   'descr': {'str': 'Set Pre-set',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Code for pre-set'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Set Pre-set
     {'type': 'TOGGLE_STATE',                        'id': 29,   'descr': {'str': 'Toggle state',
                                                                           'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
                                                                                   1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
                                                                                   2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
                                                                          }},    # Toggle state
-    {'type': 'TIMED_PULSE_ON',                      'id': 30,   'descr': {}},  # Timed pulse on
-    {'type': 'TIMED_PULSE_OFF',                     'id': 31,   'descr': {}},  # Timed pulse off
-    {'type': 'SET_COUNTRY_LANGUAGE',                'id': 32,   'descr': {}},  # Set country/language
-    {'type': 'BIG_CHANGE_LEVEL',                    'id': 33,   'descr': {}},  # Big Change level
+    {'type': 'TIMED_PULSE_ON',                      'id': 30,   'descr': {'str': 'Timed pulse on',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 1, 't': 'pulsecod', 'd': 'Control byte'},
+                                                                                  4: {'l': 4, 't': 'uint', 'd': 'Time-On'}}
+                                                                         }},    # Timed pulse on
+    {'type': 'TIMED_PULSE_OFF',                     'id': 31,   'descr': {'str': 'Timed pulse off',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 1, 't': 'pulsecod', 'd': 'Control byte'},
+                                                                                  4: {'l': 4, 't': 'uint', 'd': 'Time-Off'}}
+                                                                         }},    # Timed pulse off
+    {'type': 'SET_COUNTRY_LANGUAGE',                'id': 32,   'descr': {'str': 'Set country/language',
+                                                                          'dlc': {0: {'l': 1, 't': 'langcod', 'd': 'Code type'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'ascii', 'd': 'Language code'}}
+                                                                         }},    # Set country/language
+    {'type': 'BIG_CHANGE_LEVEL',                    'id': 33,   'descr': {'str': 'Big Change level',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'int', 'd': 'Level'}}
+                                                                         }},    # Big Change level
     {'type': 'SHUTTER_UP',                          'id': 34,   'descr': {'str': 'Move shutter up',
                                                                           'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
                                                                                   1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
@@ -1357,7 +1586,12 @@ _class_1_control = [
                                                                                   1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
                                                                                   2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
                                                                          }},    # Move shutter to middle position
-    {'type': 'SHUTTER_PRESET',                      'id': 39,   'descr': {}},    # Move shutter to preset position
+    {'type': 'SHUTTER_PRESET',                      'id': 39,   'descr': {'str': 'Move shutter to preset position',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 1, 't': 'uint', 'd': 'Position'}}
+                                                                         }},    # Move shutter to preset position
     {'type': 'ALL_LAMPS_ON',                        'id': 40,   'descr': {'str': '(All) Lamp(s) on',
                                                                           'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
                                                                                   1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
@@ -1378,20 +1612,66 @@ _class_1_control = [
                                                                                   1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
                                                                                   2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
                                                                          }},    # Unlock
-    {'type': 'PWM',                                 'id': 44,   'descr': {}},  # PWM set
-    {'type': 'TOKEN_LOCK',                          'id': 45,   'descr': {}},  # Lock with token
-    {'type': 'TOKEN_UNLOCK',                        'id': 46,   'descr': {}},  # Unlock with token
-    {'type': 'SET_SECURITY_LEVEL',                  'id': 47,   'descr': {}},  # Set security level
-    {'type': 'SET_SECURITY_PIN',                    'id': 48,   'descr': {}},  # Set security pin
-    {'type': 'SET_SECURITY_PASSWORD',               'id': 49,   'descr': {}},  # Set security password
-    {'type': 'SET_SECURITY_TOKEN',                  'id': 50,   'descr': {}},  # Set security token
+    {'type': 'PWM',                                 'id': 44,   'descr': {'str': 'PWM set',
+                                                                          'dlc': {0: {'l': 1, 't': 'reptype', 'd': 'Repeat/counter'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 1, 't': 'timeunit', 'd': 'Control byte'},
+                                                                                  4: {'l': 2, 't': 'uint', 'd': 'Time-On'},
+                                                                                  5: {'l': 2, 't': 'uint', 'd': 'Time-Off'}}
+                                                                         }},    # PWM set
+    {'type': 'TOKEN_LOCK',                          'id': 45,   'descr': {'str': 'Lock with token',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'uint', 'd': 'Token'}}
+                                                                         }},    # Lock with token
+    {'type': 'TOKEN_UNLOCK',                        'id': 46,   'descr': {'str': 'Unlock with token',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'uint', 'd': 'Token'}}
+                                                                         }},    # Unlock with token
+    {'type': 'SET_SECURITY_LEVEL',                  'id': 47,   'descr': {'str': 'Set security level',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Security level'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Set security level
+    {'type': 'SET_SECURITY_PIN',                    'id': 48,   'descr': {'str': 'Set security pin',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'uint', 'd': 'Pin'}}
+                                                                         }},    # Set security pin
+    {'type': 'SET_SECURITY_PASSWORD',               'id': 49,   'descr': {'str': 'Set security password',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'utf8', 'd': 'Password'}}
+                                                                         }},    # Set security password
+    {'type': 'SET_SECURITY_TOKEN',                  'id': 50,   'descr': {'str': 'Set security token',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'uint', 'd': 'Token'}}
+                                                                         }},    # Set security token
     {'type': 'REQUEST_SECURITY_TOKEN',              'id': 51,   'descr': {'str': 'Request new security token',
                                                                           'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
                                                                                   1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
                                                                                   2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
                                                                          }},    # Request new security token
-    {'type': 'INCREMENT',                           'id': 52,   'descr': {}},  # Increment
-    {'type': 'DECREMENT',                           'id': 53,   'descr': {}},  # Decrement
+    {'type': 'INCREMENT',                           'id': 52,   'descr': {'str': 'Increment',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'uint', 'd': 'Value'}}
+                                                                         }},    # Increment
+    {'type': 'DECREMENT',                           'id': 53,   'descr': {'str': 'Decrement',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'uint', 'd': 'Value'}}
+                                                                         }},    # Decrement
 ]
 _class_1_multimedia = [
     {'type': 'GENERAL',                             'id': 0,    'descr': {}},  # General event
