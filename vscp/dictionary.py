@@ -80,17 +80,18 @@ class Dictionary:
     def parse_data(self, class_id: int, type_id: int, data: list) -> list:
         data_descr = self._get_data_description(class_id, type_id)
         description = data_descr['str'] if 'str' in data_descr else ''
+        units = data_descr['uni'] if 'uni' in data_descr else {}
         result = [[description, '']]
         if 'dlc' in data_descr:
-            idx = 0
-            for itr in range(len(data_descr['dlc'])):
-                data_len = data_descr['dlc'][itr]['l']
-                data_type = data_descr['dlc'][itr]['t']
-                data_str = data_descr['dlc'][itr]['d']
-                value_str = self._convert(data_type, data[idx:(idx + data_len)])
+            pos = 0
+            for idx in range(len(data_descr['dlc'])):
+                data_len = data_descr['dlc'][idx]['l']
+                data_type = data_descr['dlc'][idx]['t']
+                data_str = data_descr['dlc'][idx]['d']
+                value_str = self._convert(data_type, data[pos:(pos + data_len)], units)
                 if 0 != len(data) or 'none' == data_type:
                     result.append([data_str, value_str])
-                idx += data_len
+                pos += data_len
         return result
 
 
@@ -101,34 +102,34 @@ class Dictionary:
         return result
 
 
-    def _convert_int(self, data: list) -> str:
+    def _convert_int(self, data: list, _) -> str:
         try:
             val = int.from_bytes(data, 'big', signed=True)
         except ValueError:
             val = 0
-        return f'{val}'
+        return f'{val:d}'
 
 
-    def _convert_uint(self, data: list) -> str:
+    def _convert_uint(self, data: list, _) -> str:
         try:
             val = int.from_bytes(data, 'big', signed=False)
         except ValueError:
             val = 0
-        return f'{val}'
+        return f'{val:d}'
 
 
-    def _convert_ruint(self, data: list) -> str:
+    def _convert_ruint(self, data: list, _) -> str:
         try:
             val = int.from_bytes(data, 'big', signed=False) & 0xFF
             if 0 == val:
                 val = 256
-            result = f'{val}'
+            result = f'{val:d}'
         except ValueError:
             result = ''
         return result
 
 
-    def _convert_hexint(self, data: list) -> str:
+    def _convert_hexint(self, data: list, _) -> str:
         try:
             val = int.from_bytes(data, 'big', signed=False)
         except ValueError:
@@ -137,7 +138,7 @@ class Dictionary:
         return f'0x{val:0{width}X}'
 
 
-    def _convert_float(self, data: list) -> str:
+    def _convert_float(self, data: list, _) -> str:
         data.reverse()
         try:
             val = memoryview(bytearray(data)).cast('f')[0]
@@ -146,7 +147,7 @@ class Dictionary:
         return f'{val:.7G}'
 
 
-    def _convert_double(self, data: list) -> str:
+    def _convert_double(self, data: list, _) -> str:
         data.reverse()
         try:
             val = memoryview(bytearray(data)).cast('d')[0]
@@ -155,7 +156,7 @@ class Dictionary:
         return f'{val:.16G}'
 
 
-    def _convert_dtime0(self, data: list) -> str:
+    def _convert_dtime0(self, data: list, _) -> str:
         try:
             val = int.from_bytes(data, 'big', signed=False) & 0x00000000FFFFFFFF
         except ValueError:
@@ -163,7 +164,7 @@ class Dictionary:
         return str(datetime.fromtimestamp(val))
 
 
-    def _convert_dtime1(self, data: list) -> str:
+    def _convert_dtime1(self, data: list, _) -> str:
         try:
             val = int.from_bytes(data, 'big') & 0x0000003FFFFFFFFF
             year   = val >> 26 & 0x0FFF
@@ -178,7 +179,7 @@ class Dictionary:
         return result
 
 
-    def _convert_date_ymd(self, data: list) -> str:
+    def _convert_date_ymd(self, data: list, _) -> str:
         result = '0000-00-00'
         if 4 == len(data):
             try:
@@ -191,11 +192,11 @@ class Dictionary:
         return result
 
 
-    def _convert_timeHMSms(self, data: list) -> str:
+    def _convert_time_hms_ms(self, data: list, _) -> str:
         result = '00:00:00.000'
         if 5 == len(data):
             try:
-                hour = int(data[0], 'big', signed=False))
+                hour = int(data[0], 'big', signed=False)
                 minute = int(data[1])
                 second = int(data[2])
                 millisecond = int(int.from_bytes(data[3:], 'big', signed=False))
@@ -205,8 +206,8 @@ class Dictionary:
         return result
 
 
-    def _convert_weekday(self, data: list) -> str:
-        weekdays = {
+    def _convert_weekday(self, data: list, _) -> str:
+        results = {
             0: 'Monday',
             1: 'Tuesday',
             2: 'Wednesday',
@@ -216,13 +217,13 @@ class Dictionary:
             6: 'Sunday'
         }
         try:
-            result = weekdays[data[0]]
+            result = results[data[0]]
         except (KeyError, ValueError):
             result = 'Unknown'
         return result
 
 
-    def _convert_flags0(self, data: list) -> str:
+    def _convert_flags0(self, data: list, _) -> str:
         try:
             val = int.from_bytes(data, 'big', signed=False)
         except ValueError:
@@ -248,7 +249,7 @@ class Dictionary:
         return result
 
 
-    def _convert_flags1(self, data: list) -> str:
+    def _convert_flags1(self, data: list, _) -> str:
         try:
             val = int.from_bytes(data, 'big', signed=False)
         except ValueError:
@@ -284,7 +285,7 @@ class Dictionary:
         return result
 
 
-    def _convert_blalgo(self, data: list) -> str:
+    def _convert_blalgo(self, data: list, _) -> str:
         results = {
             0x00:   'VSCP algorithm',
             0x01:   'Microchip PIC algorithm',
@@ -304,7 +305,7 @@ class Dictionary:
         return result
 
 
-    def _convert_memtyp(self, data: list) -> str:
+    def _convert_memtyp(self, data: list, _) -> str:
         results = {
             0x01:   'DATA (EEPROM, MRAM, FRAM)',
             0x02:   'CONFIG (CPU configuration)',
@@ -323,7 +324,7 @@ class Dictionary:
         return result
 
 
-    def _convert_dimtype(self, data: list) -> str:
+    def _convert_dimtype(self, data: list, _) -> str:
         try:
             val = int(data[0])
         except ValueError:
@@ -343,7 +344,7 @@ class Dictionary:
         return result
 
 
-    def _convert_repeattype(self, data: list) -> str:
+    def _convert_repeattype(self, data: list, _) -> str:
         try:
             val = int(data[0])
         except ValueError:
@@ -354,9 +355,10 @@ class Dictionary:
             result = f'{val:d}'
         else:
             result = 'Unknown'
+        return result
 
 
-    def _convert_evbutton(self, data: list) -> str:
+    def _convert_evbutton(self, data: list, _) -> str:
         result = ''
         try:
             val = int(data) & 0xFF
@@ -373,8 +375,7 @@ class Dictionary:
         return result
 
 
-    def _convert_evtoken(self, data: list) -> str:
-        result = ''
+    def _convert_evtoken(self, data: list, _) -> str:
         event_codes = {
             0:  'Touched-released',
             1:  'Touched',
@@ -411,20 +412,20 @@ class Dictionary:
         try:
             val = (int(data[0]) >> 2) & 0x3F
             result += token_types[val]
-        except:
+        except (ValueError, KeyError):
             result += 'Unknown'
         return result
 
 
-    def _convert_onoffstate(self, data: list) -> str:
+    def _convert_onoffstate(self, data: list, _) -> str:
         result = ''
         if 1 == len(data):
             result = 'ON' if 0 != data[0] else 'OFF'
         return result
 
 
-    def _convert_timeunit(self, data: list) -> str:
-        time_codes = {
+    def _convert_timeunit(self, data: list, _) -> str:
+        results = {
             0:  'Time in microseconds',
             1:  'Time in milliseconds',
             2:  'Time in seconds',
@@ -434,14 +435,14 @@ class Dictionary:
         }
         try:
             val = int(data[0]) & 0x0F
-            result = time_codes[val]
+            result = results[val]
         except (ValueError, KeyError):
             result = 'Reserved'
         return result
 
 
-    def _convert_langcoding(self, data: list) -> str:
-        language_codes = {
+    def _convert_langcoding(self, data: list, _) -> str:
+        results = {
             0:  'Custom coded system',
             1:  'ISO 639-1',
             2:  'ISO 639-2/T',
@@ -451,16 +452,16 @@ class Dictionary:
         }
         try:
             val = int(data[0])
-            result = language_codes[val]
+            result = results[val]
         except (ValueError, KeyError):
             result = 'Unknown'
         return result
 
 
-    def _convert_pulsetypecoding(self, data: list) -> str:
+    def _convert_pulsetypecoding(self, data: list, _) -> str:
         try:
-            val = int(data[0]) & 0x0F
-            result = self._convert_timeunit(data)
+            val = int(data[0])
+            result = self._convert_timeunit(data, _)
             bits = []
             for idx in range (6, 8):
                 if val & (1 << idx):
@@ -470,7 +471,7 @@ class Dictionary:
                 result += os.linesep + (' ' * MULTILINE_INDENT)
                 match bits[idx]:
                     case 6:
-                        result += 'Send INFO.ON event when pulse goes on'
+                        result += 'Send INFO.ON  event when pulse goes on'
                     case 7:
                         result += 'Send INFO.OFF event when pulse goes off'
                     case _:
@@ -480,11 +481,32 @@ class Dictionary:
         return result
 
 
-    def _convert_measurecoding(self, data: list) -> str:
-        return 'Unimplemented'
+    def _convert_measurecoding(self, data: list, units: dict) -> dict:# TODO impl
+        result = {}
+        if 1 == len(data):
+            formats = {
+                0x00:   'bits',
+                0x01:   'bytes',
 
+            }
+            try:
+                val = int(data[0])
+                data_coding = formats[(val >> 5) & 0x07]
+                unit = units[(val >> 3) & 0x03]
+                result['sensorIndex'] = val & 0x07
 
-    def _convert_measureindex(self, data: list) -> str:
+            except (ValueError, KeyError):
+                pass
+        return result
+
+    def _convert_measurement_data(self, data: list, units: dict) -> str:# TODO impl
+        result = ''
+        if 1 < len(data):
+            coding = self._convert_measurecoding(data[0], units)
+
+        return result
+
+    def _convert_measureindex(self, data: list, _) -> str:
         try:
             val = int(data[0])
         except ValueError:
@@ -498,7 +520,7 @@ class Dictionary:
         return result
 
 
-    def _convert_sensorindex(self, data: list) -> str:
+    def _convert_sensorindex(self, data: list, _) -> str:
         try:
             val = int(data[0])
         except ValueError:
@@ -512,7 +534,7 @@ class Dictionary:
         return result
 
 
-    def _convert_channeltype(self, data: list) -> str:
+    def _convert_channeltype(self, data: list, _) -> str:
         try:
             val = int(data[0], )
         except ValueError:
@@ -530,34 +552,34 @@ class Dictionary:
         return result
 
 
-    def _convert_coord(self, data: list) -> str:
+    def _convert_coord(self, data: list, _) -> str:
         result = ''
         if 1 == len(data):
             result = 'absolute' if 0 != data[0] else 'relative'
         return result
 
 
-    def _convert_ipv4(self, data: list) -> str:
+    def _convert_ipv4(self, data: list, _) -> str:
         result = 'None' if 4 != len(data) else '.'.join(f'{(val & 0xFF):d}' for val in data)
         return result
 
 
-    def _convert_raw(self, data: list) -> str:
+    def _convert_raw(self, data: list, _) -> str:
         result = ' '.join(f'0x{val:02X}' for val in data) if 0 != len(data) else ''
         return result
 
 
-    def _convert_ascii(self, data: list) -> str:
-        result = ''.join([chr(val) for val in data])
+    def _convert_ascii(self, data: list, _) -> str:
+        result = ''.join([chr(val) for val in data]) if 0 != len(data) else ''
         return result
 
 
-    def _convert_utf8(self, data: list) -> str:
-        result = bytes(data).decode('utf-8')
+    def _convert_utf8(self, data: list, _) -> str:
+        result = bytes(data).decode('utf-8') if 0 != len(data) else ''
         return result
 
 
-    def _convert(self, data_type: str, data: list) -> str:
+    def _convert(self, data_type: str, data: list, units: dict) -> str:
         func_map = {'int':      self._convert_int,
                     'uint':     self._convert_uint,
                     'ruint':    self._convert_ruint,
@@ -567,7 +589,7 @@ class Dictionary:
                     'dtime0':   self._convert_dtime0,
                     'dtime1':   self._convert_dtime1,
                     'dateYMD':  self._convert_date_ymd,
-                    'tHMSms':   self._convert_timeHMSms,
+                    'timHMSms': self._convert_time_hms_ms,
                     'weekday':  self._convert_weekday,
                     'flags0':   self._convert_flags0,
                     'flags1':   self._convert_flags1,
@@ -591,7 +613,7 @@ class Dictionary:
                     'ascii':    self._convert_ascii,
                     'utf8':     self._convert_utf8,
                    }
-        result = func_map[data_type](data) if data_type in func_map else ''
+        result = func_map[data_type](data, units) if data_type in func_map else ''
         return result
 
 
@@ -1316,7 +1338,7 @@ _class_1_information = [
                                                                           'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
                                                                                   1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
                                                                                   2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
-                                                                                  3: {'l': 5, 't': 'tHMSms', 'd': 'Time'}}
+                                                                                  3: {'l': 5, 't': 'timHMSms', 'd': 'Time'}}
                                                                          }},    # Time
     {'type': 'WEEKDAY',                             'id': 74,   'descr': {'str': 'Weekday',
                                                                           'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
@@ -1481,9 +1503,22 @@ _class_1_control = [
                                                                                   1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
                                                                                   2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
                                                                          }},    # Deactivate
-    {'type': 'RESERVED17',                          'id': 17,   'descr': {}},   # Reserved for future use
-    {'type': 'RESERVED18',                          'id': 18,   'descr': {}},   # Reserved for future use
-    {'type': 'RESERVED19',                          'id': 19,   'descr': {}},   # Reserved for future use
+    {'type': 'TURN_ALL_OFF',                        'id': 17,   'descr': {'str': 'Set all devices off',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Set all devices off
+    {'type': 'TURN_ALL_ON',                         'id': 18,   'descr': {'str': 'Set all devices on',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},   # Set all devices on
+    {'type': 'TURN_ALL_X',                          'id': 19,   'descr': {'str': 'Set all device on/off as of argument',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 1, 't': 'onoffst', 'd': 'State'}}
+                                                                         }},    # Set all device on/off as of argument
     {'type': 'DIM_LAMPS',                           'id': 20,   'descr': {'str': 'Dim lamp(s)',
                                                                           'dlc': {0: {'l': 1, 't': 'dimtype', 'd': 'Value'},
                                                                                   1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
