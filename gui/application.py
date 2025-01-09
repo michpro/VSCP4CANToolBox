@@ -21,7 +21,7 @@ class Application(ctk.CTk): # pylint: disable=too-few-public-methods
         icon_dir = os.path.join(current_path, 'icons')
         icon_path = os.path.join(icon_dir, 'vscp_logo.ico')
         font_dir = os.path.join(current_path, 'fonts')
-        font_path = os.path.join(font_dir, 'Courier Condensed Regular.ttf')
+        font_path = os.path.join(font_dir, 'UbuntuMono-R.ttf')
         ctk.FontManager.load_font(font_path)
 
 
