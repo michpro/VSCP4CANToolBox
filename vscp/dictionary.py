@@ -102,6 +102,14 @@ class Dictionary:
         return result
 
 
+    def _convert_bits(self, data: list, _) -> str:
+        result = ''
+        for idx, val in enumerate(data):
+            result += f'{val:08b}'
+            result += ' ' if 3 !=idx else (os.linesep + (' ' * MULTILINE_INDENT))
+        return result
+
+
     def _convert_int(self, data: list, _) -> str:
         try:
             val = int.from_bytes(data, 'big', signed=True)
@@ -136,6 +144,20 @@ class Dictionary:
             val = 0
         width = 2 * len(data)
         return f'0x{val:0{width}X}'
+
+
+    def _convert_normalizedint(self, data: list, _) -> str:
+        result = ''
+        if 1 < len(data):
+            try:
+                val = int(data[0])
+                exponent = (val & 0x7F) * (-1 if 0 != val & 0x80 else 1)
+                normalizer = pow(10, exponent)
+                val = float(int.from_bytes(data[1:], 'big', signed=True) * normalizer)
+                result = f'{val:.16G}'
+            except ValueError:
+                result = 'NaN'
+        return result
 
 
     def _convert_float(self, data: list, _) -> str:
@@ -179,6 +201,22 @@ class Dictionary:
         return result
 
 
+    def _convert_dtime2(self, data: list, _) -> str:
+        result = '0000-00-00 00:00:00'
+        if 7 == len(data):
+            try:
+                year   = int(int.from_bytes(data[:2], 'big', signed=False))
+                month  = int(data[2])
+                day    = int(data[3])
+                hour   = int(data[4])
+                minute = int(data[5])
+                second = int(data[6])
+                result = f'{year:04d}-{month:02d}-{day:02d} {hour:02d}:{minute:02d}:{second:02d}'
+            except ValueError:
+                pass
+        return result
+
+
     def _convert_date_ymd(self, data: list, _) -> str:
         result = '0000-00-00'
         if 4 == len(data):
@@ -189,6 +227,18 @@ class Dictionary:
                 result = f'{year:04d}-{month:02d}-{day:02d}'
             except ValueError:
                 pass
+        return result
+
+
+    def _convert_time_hms(self, data: list, _) -> str:
+        if 6 != len(data):
+            result = '00:00:00'
+        else:
+            pos = [1, 3]
+            result = ''
+            for idx, val in enumerate(data):
+                result += chr(val)
+                result += ':' if idx in pos else ''
         return result
 
 
@@ -482,29 +532,48 @@ class Dictionary:
 
 
     def _convert_measurecoding(self, data: list, units: dict) -> dict:# TODO impl
-        result = {}
+        result = {'dataType':       'raw',
+                  'unit':           '',
+                  'sensorIndex':    0}
         if 1 == len(data):
             formats = {
                 0x00:   'bits',
-                0x01:   'bytes',
-
+                0x01:   'raw',
+                0x02:   'ascii',
+                0x03:   'int',
+                0x04:   'normint',
+                0x05:   'float',
+                0x06:   'double',
+                0x07:   'RESERVED'
             }
             try:
                 val = int(data[0])
-                data_coding = formats[(val >> 5) & 0x07]
-                unit = units[(val >> 3) & 0x03]
                 result['sensorIndex'] = val & 0x07
-
+                unit = units[(val >> 3) & 0x03] if (val >> 3) & 0x03 in units else ''
+                if isinstance(unit, dict):
+                    result['unit'] = unit['u'] if 'u' in unit else ''
+                    data_type = unit['t'] if 't' in unit else 'unknown'
+                    # print(data_type)
+                else:
+                    result['unit'] = unit
+                    data_type = formats[(val >> 5) & 0x07]
+                result['dataType'] = data_type
             except (ValueError, KeyError):
                 pass
         return result
 
-    def _convert_measurement_data(self, data: list, units: dict) -> str:# TODO impl
-        result = ''
-        if 1 < len(data):
-            coding = self._convert_measurecoding(data[0], units)
 
+    def _convert_measurement_data(self, data: list, units: dict) -> str:
+        if 1 < len(data):
+            coding = self._convert_measurecoding([data[0]], units)
+            try:
+                result = self._convert(coding['dataType'], data[1:], {})
+                result += (' ' + coding['unit']) if '' != coding['unit'] else ''
+                result += os.linesep + f"{'Sensor index':<{MULTILINE_INDENT}}" + str(coding['sensorIndex'])
+            except KeyError:
+                result = 'CONVERSION ERROR'
         return result
+
 
     def _convert_measureindex(self, data: list, _) -> str:
         try:
@@ -580,15 +649,19 @@ class Dictionary:
 
 
     def _convert(self, data_type: str, data: list, units: dict) -> str:
-        func_map = {'int':      self._convert_int,
+        func_map = {'bits':     self._convert_bits,
+                    'int':      self._convert_int,
                     'uint':     self._convert_uint,
                     'ruint':    self._convert_ruint,
                     'hexint':   self._convert_hexint,
+                    'normint':  self._convert_normalizedint,
                     'float':    self._convert_float,
                     'double':   self._convert_double,
                     'dtime0':   self._convert_dtime0,
                     'dtime1':   self._convert_dtime1,
+                    'dtime2':   self._convert_dtime2,
                     'dateYMD':  self._convert_date_ymd,
+                    'timeHMS':  self._convert_time_hms,
                     'timHMSms': self._convert_time_hms_ms,
                     'weekday':  self._convert_weekday,
                     'flags0':   self._convert_flags0,
@@ -603,7 +676,7 @@ class Dictionary:
                     'timeunit': self._convert_timeunit,
                     'langcod':  self._convert_langcoding,
                     'pulsecod': self._convert_pulsetypecoding,
-                    'meascod':  self._convert_measurecoding,
+                    'measdata': self._convert_measurement_data,
                     'measidx':  self._convert_measureindex,
                     'sensidx':  self._convert_sensorindex,
                     'channt':   self._convert_channeltype,
@@ -613,8 +686,9 @@ class Dictionary:
                     'ascii':    self._convert_ascii,
                     'utf8':     self._convert_utf8,
                    }
-        result = func_map[data_type](data, units) if data_type in func_map else ''
-        return result
+        if data_type not in func_map:
+            data_type = 'raw'
+        return func_map[data_type](data, units)
 
 
 _vscp_priority = [
@@ -871,71 +945,303 @@ _class_1_security = [
 ]
 _class_1_measurement = [
     {'type': 'GENERAL',                             'id': 0,    'descr': {}},  # General event
-    {'type': 'COUNT',                               'id': 1,    'descr': {}},  # Count
-    {'type': 'LENGTH',                              'id': 2,    'descr': {}},  # Length/Distance
-    {'type': 'MASS',                                'id': 3,    'descr': {}},  # Mass
-    {'type': 'TIME',                                'id': 4,    'descr': {}},  # Time
-    {'type': 'ELECTRIC_CURRENT',                    'id': 5,    'descr': {}},  # Electric Current
-    {'type': 'TEMPERATURE',                         'id': 6,    'descr': {}},  # Temperature
-    {'type': 'AMOUNT_OF_SUBSTANCE',                 'id': 7,    'descr': {}},  # Amount of substance
-    {'type': 'INTENSITY_OF_LIGHT',                  'id': 8,    'descr': {}},  # Luminous Intensity (Intensity of light)
-    {'type': 'FREQUENCY',                           'id': 9,    'descr': {}},  # Frequency
-    {'type': 'RADIOACTIVITY',                       'id': 10,   'descr': {}},  # Radioactivity and other random events
-    {'type': 'FORCE',                               'id': 11,   'descr': {}},  # Force
-    {'type': 'PRESSURE',                            'id': 12,   'descr': {}},  # Pressure
-    {'type': 'ENERGY',                              'id': 13,   'descr': {}},  # Energy
-    {'type': 'POWER',                               'id': 14,   'descr': {}},  # Power
-    {'type': 'ELECTRICAL_CHARGE',                   'id': 15,   'descr': {}},  # Electrical Charge
-    {'type': 'ELECTRICAL_POTENTIAL',                'id': 16,   'descr': {}},  # Electrical Potential (Voltage)
-    {'type': 'ELECTRICAL_CAPACITANCE',              'id': 17,   'descr': {}},  # Electrical Capacitance
-    {'type': 'ELECTRICAL_RESISTANCE',               'id': 18,   'descr': {}},  # Electrical Resistance
-    {'type': 'ELECTRICAL_CONDUCTANCE',              'id': 19,   'descr': {}},  # Electrical Conductance
-    {'type': 'MAGNETIC_FIELD_STRENGTH',             'id': 20,   'descr': {}},  # Magnetic Field Strength
-    {'type': 'MAGNETIC_FLUX',                       'id': 21,   'descr': {}},  # Magnetic Flux
-    {'type': 'MAGNETIC_FLUX_DENSITY',               'id': 22,   'descr': {}},  # Magnetic Flux Density
-    {'type': 'INDUCTANCE',                          'id': 23,   'descr': {}},  # Inductance
-    {'type': 'FLUX_OF_LIGHT',                       'id': 24,   'descr': {}},  # Luminous Flux
-    {'type': 'ILLUMINANCE',                         'id': 25,   'descr': {}},  # Illuminance
-    {'type': 'RADIATION_DOSE_ABSORBED',             'id': 26,   'descr': {}},  # Radiation dose (absorbed)
-    {'type': 'CATALYTIC_ACITIVITY',                 'id': 27,   'descr': {}},  # Catalytic activity
-    {'type': 'VOLUME',                              'id': 28,   'descr': {}},  # Volume
-    {'type': 'SOUND_INTENSITY',                     'id': 29,   'descr': {}},  # Sound intensity
-    {'type': 'ANGLE',                               'id': 30,   'descr': {}},  # Angle, direction or similar
-    {'type': 'POSITION',                            'id': 31,   'descr': {}},  # Position WGS 84
-    {'type': 'SPEED',                               'id': 32,   'descr': {}},  # Speed
-    {'type': 'ACCELERATION',                        'id': 33,   'descr': {}},  # Acceleration
-    {'type': 'TENSION',                             'id': 34,   'descr': {}},  # Tension
-    {'type': 'HUMIDITY',                            'id': 35,   'descr': {}},  # Damp/moist (Hygrometer reading)
-    {'type': 'FLOW',                                'id': 36,   'descr': {}},  # Flow
-    {'type': 'THERMAL_RESISTANCE',                  'id': 37,   'descr': {}},  # Thermal resistance
-    {'type': 'REFRACTIVE_POWER',                    'id': 38,   'descr': {}},  # Refractive (optical) power
-    {'type': 'DYNAMIC_VISCOSITY',                   'id': 39,   'descr': {}},  # Dynamic viscosity
-    {'type': 'SOUND_IMPEDANCE',                     'id': 40,   'descr': {}},  # Sound impedance
-    {'type': 'SOUND_RESISTANCE',                    'id': 41,   'descr': {}},  # Sound resistance
-    {'type': 'ELECTRIC_ELASTANCE',                  'id': 42,   'descr': {}},  # Electric elastance
-    {'type': 'LUMINOUS_ENERGY',                     'id': 43,   'descr': {}},  # Luminous energy
-    {'type': 'LUMINANCE',                           'id': 44,   'descr': {}},  # Luminance
-    {'type': 'CHEMICAL_CONCENTRATION_MOLAR',        'id': 45,   'descr': {}},  # Chemical (molar) concentration
-    {'type': 'CHEMICAL_CONCENTRATION_MASS',         'id': 46,   'descr': {}},  # Chemical (mass) concentration
-    {'type': 'RESERVED47',                          'id': 47,   'descr': {}},  # Reserved
-    {'type': 'RESERVED48',                          'id': 48,   'descr': {}},  # Reserved
-    {'type': 'DEWPOINT',                            'id': 49,   'descr': {}},  # Dew Point
-    {'type': 'RELATIVE_LEVEL',                      'id': 50,   'descr': {}},  # Relative Level
-    {'type': 'ALTITUDE',                            'id': 51,   'descr': {}},  # Altitude
-    {'type': 'AREA',                                'id': 52,   'descr': {}},  # Area
-    {'type': 'RADIANT_INTENSITY',                   'id': 53,   'descr': {}},  # Radiant intensity
-    {'type': 'RADIANCE',                            'id': 54,   'descr': {}},  # Radiance
-    {'type': 'IRRADIANCE',                          'id': 55,   'descr': {}},  # Irradiance, Exitance, Radiosity
-    {'type': 'SPECTRAL_RADIANCE',                   'id': 56,   'descr': {}},  # Spectral radiance
-    {'type': 'SPECTRAL_IRRADIANCE',                 'id': 57,   'descr': {}},  # Spectral irradiance
-    {'type': 'SOUND_PRESSURE',                      'id': 58,   'descr': {}},  # Sound pressure (acoustic pressure)
-    {'type': 'SOUND_DENSITY',                       'id': 59,   'descr': {}},  # Sound energy density
-    {'type': 'SOUND_LEVEL',                         'id': 60,   'descr': {}},  # Sound level
-    {'type': 'DOSE_EQVIVALENT',                     'id': 61,   'descr': {}},  # Radiation dose (equivalent)
-    {'type': 'RADIATION_DOSE_EXPOSURE',             'id': 62,   'descr': {}},  # Radiation dose (exposure)
-    {'type': 'POWER_FACTOR',                        'id': 63,   'descr': {}},  # Power factor
-    {'type': 'REACTIVE_POWER',                      'id': 64,   'descr': {}},  # Reactive Power
-    {'type': 'REACTIVE_ENERGY',                     'id': 65,   'descr': {}},  # Reactive Energy
+    {'type': 'COUNT',                               'id': 1,    'descr': {'str': 'Count',
+                                                                          'dlc': {0: {'l': 8, 't': 'measdata', 'd': 'Value'}},
+                                                                          'uni': {}                 # no unit
+                                                                         }},    # Count
+    {'type': 'LENGTH',                              'id': 2,    'descr': {'str': 'Length/Distance',
+                                                                          'dlc': {0: {'l': 8, 't': 'measdata', 'd': 'Value'}},
+                                                                          'uni': {0: 'm'}           # meter
+                                                                         }},    # Length/Distance
+    {'type': 'MASS',                                'id': 3,    'descr': {'str': 'Mass',
+                                                                          'dlc': {0: {'l': 8, 't': 'measdata', 'd': 'Value'}},
+                                                                          'uni': {0: 'kg'}          # kilogram
+                                                                         }},    # Mass
+    {'type': 'TIME',                                'id': 4,    'descr': {'str': 'Time',
+                                                                          'dlc': {0: {'l': 8, 't': 'measdata', 'd': 'Value'}},
+                                                                          'uni': {0: 's',               # seconds
+                                                                                  1: 'ms',              # milliseconds
+                                                                                  2: {'t': 'dtime2'},   # y-y-m-d-h-m-s (binary) conversion
+                                                                                  3: {'t': 'timeHMS'}}  # string: "HHMMSS"
+                                                                         }},    # Time
+    {'type': 'ELECTRIC_CURRENT',                    'id': 5,    'descr': {'str': 'Electric Current',
+                                                                          'dlc': {0: {'l': 8, 't': 'measdata', 'd': 'Value'}},
+                                                                          'uni': {0: 'A'}           # ampere
+                                                                         }},    # Electric Current
+    {'type': 'TEMPERATURE',                         'id': 6,    'descr': {'str': 'Temperature',
+                                                                          'dlc': {0: {'l': 8, 't': 'measdata', 'd': 'Value'}},
+                                                                          'uni': {0: 'K',           # Kelvin
+                                                                                  1: '°C',          # degree Celsius
+                                                                                  2: '°F'}          # degree Fahrenheit
+                                                                         }},    # Temperature
+    {'type': 'AMOUNT_OF_SUBSTANCE',                 'id': 7,    'descr': {'str': 'Electric Current',
+                                                                          'dlc': {0: {'l': 8, 't': 'measdata', 'd': 'Value'}},
+                                                                          'uni': {0: 'mol'}         # mole (amount of a substance)
+                                                                         }},    # Amount of substance
+    {'type': 'INTENSITY_OF_LIGHT',                  'id': 8,    'descr': {'str': 'Luminous Intensity (Intensity of light)',
+                                                                          'dlc': {0: {'l': 8, 't': 'measdata', 'd': 'Value'}},
+                                                                          'uni': {0: 'cd'}          # candela
+                                                                         }},    # Luminous Intensity (Intensity of light)
+    {'type': 'FREQUENCY',                           'id': 9,    'descr': {'str': 'Frequency',
+                                                                          'dlc': {0: {'l': 8, 't': 'measdata', 'd': 'Value'}},
+                                                                          'uni': {0: 'Hz'}          # hertz
+                                                                         }},    # Frequency
+    {'type': 'RADIOACTIVITY',                       'id': 10,   'descr': {'str': 'Radioactivity and other random events',
+                                                                          'dlc': {0: {'l': 8, 't': 'measdata', 'd': 'Value'}},
+                                                                          'uni': {0: 'Bq',          # becquerel
+                                                                                  1: 'Ci'}          # curie
+                                                                         }},    # Radioactivity and other random events
+    {'type': 'FORCE',                               'id': 11,   'descr': {'str': 'Force',
+                                                                          'dlc': {0: {'l': 8, 't': 'measdata', 'd': 'Value'}},
+                                                                          'uni': {0: 'N'}           # newton
+                                                                         }},    # Force
+    {'type': 'PRESSURE',                            'id': 12,   'descr': {'str': 'Pressure',
+                                                                          'dlc': {0: {'l': 8, 't': 'measdata', 'd': 'Value'}},
+                                                                          'uni': {0: 'Pa',          # pascal
+                                                                                  1: 'bar',         # 1 bar ≡ 100 kPa
+                                                                                  2: 'psi'}         # pound per square inch
+                                                                         }},    # Pressure
+    {'type': 'ENERGY',                              'id': 13,   'descr': {'str': 'Energy',
+                                                                          'dlc': {0: {'l': 8, 't': 'measdata', 'd': 'Value'}},
+                                                                          'uni': {0: 'J',           # joule
+                                                                                  1: 'kWh',         # kilowatt hour
+                                                                                  2: 'Wh',          # watt hour
+                                                                                  3: 'eV'}          # electron volt
+                                                                         }},    # Energy
+    {'type': 'POWER',                               'id': 14,   'descr': {'str': 'Power',
+                                                                          'dlc': {0: {'l': 8, 't': 'measdata', 'd': 'Value'}},
+                                                                          'uni': {0: 'W',           # watt
+                                                                                  1: 'HP (met)',    # horse power metric
+                                                                                  2: 'HP (imp)'}    # horse power imperial
+                                                                         }},    # Power
+    {'type': 'ELECTRICAL_CHARGE',                   'id': 15,   'descr': {'str': 'Electrical Charge',
+                                                                          'dlc': {0: {'l': 8, 't': 'measdata', 'd': 'Value'}},
+                                                                          'uni': {0: 'C'}           # coulomb
+                                                                         }},    # Electrical Charge
+    {'type': 'ELECTRICAL_POTENTIAL',                'id': 16,   'descr': {'str': 'Electrical Potential (Voltage)',
+                                                                          'dlc': {0: {'l': 8, 't': 'measdata', 'd': 'Value'}},
+                                                                          'uni': {0: 'V'}           # volt
+                                                                         }},    # Electrical Potential (Voltage)
+    {'type': 'ELECTRICAL_CAPACITANCE',              'id': 17,   'descr': {'str': 'Electrical Capacitance',
+                                                                          'dlc': {0: {'l': 8, 't': 'measdata', 'd': 'Value'}},
+                                                                          'uni': {0: 'F'}           # farad
+                                                                         }},    # Electrical Capacitance
+    {'type': 'ELECTRICAL_RESISTANCE',               'id': 18,   'descr': {'str': 'Electrical Resistance',
+                                                                          'dlc': {0: {'l': 8, 't': 'measdata', 'd': 'Value'}},
+                                                                          'uni': {0: 'Ω'}           # ohm
+                                                                         }},    # Electrical Resistance
+    {'type': 'ELECTRICAL_CONDUCTANCE',              'id': 19,   'descr': {'str': 'Electrical Conductance',
+                                                                          'dlc': {0: {'l': 8, 't': 'measdata', 'd': 'Value'}},
+                                                                          'uni': {0: 'S'}           # siemens
+                                                                         }},    # Electrical Conductance
+    {'type': 'MAGNETIC_FIELD_STRENGTH',             'id': 20,   'descr': {'str': 'Magnetic Field Strength',
+                                                                          'dlc': {0: {'l': 8, 't': 'measdata', 'd': 'Value'}},
+                                                                          'uni': {0: 'H [A/m]',     # amperes per meter
+                                                                                  1: 'Oe'}          # oersted
+                                                                         }},    # Magnetic Field Strength
+    {'type': 'MAGNETIC_FLUX',                       'id': 21,   'descr': {'str': 'Magnetic Flux',
+                                                                          'dlc': {0: {'l': 8, 't': 'measdata', 'd': 'Value'}},
+                                                                          'uni': {0: 'Wb'}          # weber
+                                                                         }},    # Magnetic Flux
+    {'type': 'MAGNETIC_FLUX_DENSITY',               'id': 22,   'descr': {'str': 'Magnetic Flux Density',
+                                                                          'dlc': {0: {'l': 8, 't': 'measdata', 'd': 'Value'}},
+                                                                          'uni': {0: 'T',           # tesla
+                                                                                  1: 'G'}           # gauss
+                                                                         }},    # Magnetic Flux Density
+    {'type': 'INDUCTANCE',                          'id': 23,   'descr': {'str': 'Inductance',
+                                                                          'dlc': {0: {'l': 8, 't': 'measdata', 'd': 'Value'}},
+                                                                          'uni': {0: 'H'}           # henry
+                                                                         }},    # Inductance
+    {'type': 'FLUX_OF_LIGHT',                       'id': 24,   'descr': {'str': 'Luminous Flux',
+                                                                          'dlc': {0: {'l': 8, 't': 'measdata', 'd': 'Value'}},
+                                                                          'uni': {0: 'lm'}          # lumen
+                                                                         }},    # Luminous Flux
+    {'type': 'ILLUMINANCE',                         'id': 25,   'descr': {'str': 'Illuminance',
+                                                                          'dlc': {0: {'l': 8, 't': 'measdata', 'd': 'Value'}},
+                                                                          'uni': {0: 'lx'}          # lux
+                                                                         }},    # Illuminance
+    {'type': 'RADIATION_DOSE_ABSORBED',             'id': 26,   'descr': {'str': 'Radiation dose (absorbed)',
+                                                                          'dlc': {0: {'l': 8, 't': 'measdata', 'd': 'Value'}},
+                                                                          'uni': {0: 'Gy'}          # gray
+                                                                         }},    # Radiation dose (absorbed)
+    {'type': 'CATALYTIC_ACITIVITY',                 'id': 27,   'descr': {'str': 'Catalytic activity',
+                                                                          'dlc': {0: {'l': 8, 't': 'measdata', 'd': 'Value'}},
+                                                                          'uni': {0: 'kat'}         # katal - this is a measurement of catalytic activity used in biochemistry.
+                                                                         }},    # Catalytic activity
+    {'type': 'VOLUME',                              'id': 28,   'descr': {'str': 'Volume',
+                                                                          'dlc': {0: {'l': 8, 't': 'measdata', 'd': 'Value'}},
+                                                                          'uni': {0: 'm³',          # cubic meter
+                                                                                  1: 'dm³',         # liter
+                                                                                  2: 'cm³',         # millilitre
+                                                                                  3: '100cm³'}      # decilitre
+                                                                         }},    # Volume
+    {'type': 'SOUND_INTENSITY',                     'id': 29,   'descr': {'str': 'Sound intensity',
+                                                                          'dlc': {0: {'l': 8, 't': 'measdata', 'd': 'Value'}},
+                                                                          'uni': {0: 'W/m²'}        # watt per square meter
+                                                                         }},    # Sound intensity
+    {'type': 'ANGLE',                               'id': 30,   'descr': {'str': 'Angle, direction or similar',
+                                                                          'dlc': {0: {'l': 8, 't': 'measdata', 'd': 'Value'}},
+                                                                          'uni': {0: 'rad',         # radian
+                                                                                  1: '°',           # degree
+                                                                                  2: '′',           # arcminute
+                                                                                  3: '″'}           # arcseconds
+                                                                         }},    # Angle, direction or similar
+    {'type': 'POSITION',                            'id': 31,   'descr': {'str': 'Position WGS 84',
+                                                                          'dlc': {0: {'l': 8, 't': 'measdata', 'd': 'Value'}},
+                                                                          'uni': {0: 'λ',           # longitude
+                                                                                  1: 'φ'}           # latitude
+                                                                         }},    # Position WGS 84
+    {'type': 'SPEED',                               'id': 32,   'descr': {'str': 'Speed',
+                                                                          'dlc': {0: {'l': 8, 't': 'measdata', 'd': 'Value'}},
+                                                                          'uni': {0: 'm/s',         # meters per second
+                                                                                  1: 'km/h',        # kilometers per hour
+                                                                                  2: 'mph',         # miles per hour
+                                                                                  3: 'kt'}          # nautical knot
+                                                                         }},    # Speed
+    {'type': 'ACCELERATION',                        'id': 33,   'descr': {'str': 'Acceleration',
+                                                                          'dlc': {0: {'l': 8, 't': 'measdata', 'd': 'Value'}},
+                                                                          'uni': {0: 'm/s²'}        # metre per second squared
+                                                                         }},    # Acceleration
+    {'type': 'TENSION',                             'id': 34,   'descr': {'str': 'Tension',
+                                                                          'dlc': {0: {'l': 8, 't': 'measdata', 'd': 'Value'}},
+                                                                          'uni': {0: 'N/m'}         # niuton per meter
+                                                                         }},    # Tension
+    {'type': 'HUMIDITY',                            'id': 35,   'descr': {'str': 'Damp/moist (Hygrometer reading)',
+                                                                          'dlc': {0: {'l': 8, 't': 'measdata', 'd': 'Value'}},
+                                                                          'uni': {0: '%'}           # relative percentage 0-100%
+                                                                         }},    # Damp/moist (Hygrometer reading)
+    {'type': 'FLOW',                                'id': 36,   'descr': {'str': 'Flow',
+                                                                          'dlc': {0: {'l': 8, 't': 'measdata', 'd': 'Value'}},
+                                                                          'uni': {0: 'm³/s',        # cubic meters/second
+                                                                                  1: 'l/s'}         # liters/second
+                                                                         }},    # Flow
+    {'type': 'THERMAL_RESISTANCE',                  'id': 37,   'descr': {'str': 'Thermal resistance',
+                                                                          'dlc': {0: {'l': 8, 't': 'measdata', 'd': 'Value'}},
+                                                                          'uni': {0: 'K/W'}         # kelvin per watt - (thermal ohm)
+                                                                         }},    # Thermal resistance
+    {'type': 'REFRACTIVE_POWER',                    'id': 38,   'descr': {'str': 'Refractive (optical) power',
+                                                                          'dlc': {0: {'l': 8, 't': 'measdata', 'd': 'Value'}},
+                                                                          'uni': {0: 'dpt'}         # dioptre
+                                                                         }},    # Refractive (optical) power
+    {'type': 'DYNAMIC_VISCOSITY',                   'id': 39,   'descr': {'str': 'Dynamic viscosity',
+                                                                          'dlc': {0: {'l': 8, 't': 'measdata', 'd': 'Value'}},
+                                                                          'uni': {0: 'Pa·s',        # pascal-second
+                                                                                  1: 'Pl',          # poiseuille    1 [Pl] = 1   [Pa·s]
+                                                                                  2: 'P'}           # poise         1 [P]  = 0.1 [Pa·s]
+                                                                         }},    # Dynamic viscosity
+    {'type': 'SOUND_IMPEDANCE',                     'id': 40,   'descr': {'str': 'Sound impedance',
+                                                                          'dlc': {0: {'l': 8, 't': 'measdata', 'd': 'Value'}},
+                                                                          'uni': {0: 'Pa·s/m'}      # rayl
+                                                                         }},    # Sound impedance
+    {'type': 'SOUND_RESISTANCE',                    'id': 41,   'descr': {'str': 'Sound resistance',
+                                                                          'dlc': {0: {'l': 8, 't': 'measdata', 'd': 'Value'}},
+                                                                          'uni': {0: 'Pa·s/m³'}     # acoustic ohm
+                                                                         }},    # Sound resistance
+    {'type': 'ELECTRIC_ELASTANCE',                  'id': 42,   'descr': {'str': 'Electric elastance',
+                                                                          'dlc': {0: {'l': 8, 't': 'measdata', 'd': 'Value'}},
+                                                                          'uni': {0: 'F⁻¹'}         # daraf - inverse farad
+                                                                         }},    # Electric elastance
+    {'type': 'LUMINOUS_ENERGY',                     'id': 43,   'descr': {'str': 'Luminous energy',
+                                                                          'dlc': {0: {'l': 8, 't': 'measdata', 'd': 'Value'}},
+                                                                          'uni': {0: 'tb'}          # talbot - lumen-second (tb = lm·s)
+                                                                         }},    # Luminous energy
+    {'type': 'LUMINANCE',                           'id': 44,   'descr': {'str': 'Luminance',
+                                                                          'dlc': {0: {'l': 8, 't': 'measdata', 'd': 'Value'}},
+                                                                          'uni': {0: 'cd/m²'}       # nit
+                                                                         }},    # Luminance
+    {'type': 'CHEMICAL_CONCENTRATION_MOLAR',        'id': 45,   'descr': {'str': 'Chemical (molar) concentration',
+                                                                          'dlc': {0: {'l': 8, 't': 'measdata', 'd': 'Value'}},
+                                                                          'uni': {0: 'mol/m³',      # mole per cubic meter
+                                                                                  1: 'ppm',         # parts-per-million 
+                                                                                  2: '%'}           # percent
+                                                                         }},    # Chemical (molar) concentration
+    {'type': 'CHEMICAL_CONCENTRATION_MASS',         'id': 46,   'descr': {'str': 'Chemical (mass) concentration',
+                                                                          'dlc': {0: {'l': 8, 't': 'measdata', 'd': 'Value'}},
+                                                                          'uni': {0: 'kg/m³'}       # kilogram per cubic meter
+                                                                         }},    # Chemical (mass) concentration
+    {'type': 'RESERVED47',                          'id': 47,   'descr': {}},   # Reserved
+    {'type': 'RESERVED48',                          'id': 48,   'descr': {}},   # Reserved
+    {'type': 'DEWPOINT',                            'id': 49,   'descr': {'str': 'Dew Point',
+                                                                          'dlc': {0: {'l': 8, 't': 'measdata', 'd': 'Value'}},
+                                                                          'uni': {0: 'K',           # Kelvin
+                                                                                  1: '°C',          # degree Celsius
+                                                                                  2: '°F'}          # degree Fahrenheit
+                                                                         }},    # Dew Point
+    {'type': 'RELATIVE_LEVEL',                      'id': 50,   'descr': {'str': 'Relative Level',
+                                                                          'dlc': {0: {'l': 8, 't': 'measdata', 'd': 'Value'}},
+                                                                          'uni': {}                 # no unit
+                                                                         }},    # Relative Level
+    {'type': 'ALTITUDE',                            'id': 51,   'descr': {'str': 'Altitude',
+                                                                          'dlc': {0: {'l': 8, 't': 'measdata', 'd': 'Value'}},
+                                                                          'uni': {0: 'm',           # meter
+                                                                                  1: 'ft',          # foot
+                                                                                  2: 'in'}          # inch
+                                                                         }},    # Altitude
+    {'type': 'AREA',                                'id': 52,   'descr': {'str': 'Area',
+                                                                          'dlc': {0: {'l': 8, 't': 'measdata', 'd': 'Value'}},
+                                                                          'uni': {0: 'm²',          # square metre
+                                                                                  1: 'are',         # 1 are = 100 m²
+                                                                                  2: 'hectare',     # 1 hectare = 100 ares = 10000 m² = 0.01 km²
+                                                                                  3: 'km²'}         # square kilometer
+                                                                         }},    # Area
+    {'type': 'RADIANT_INTENSITY',                   'id': 53,   'descr': {'str': 'Radiant intensity',
+                                                                          'dlc': {0: {'l': 8, 't': 'measdata', 'd': 'Value'}},
+                                                                          'uni': {0: 'W/sr'}        # watt per steradian
+                                                                         }},     # Radiant intensity
+    {'type': 'RADIANCE',                            'id': 54,   'descr': {'str': 'Radiance',
+                                                                          'dlc': {0: {'l': 8, 't': 'measdata', 'd': 'Value'}},
+                                                                          'uni': {0: 'W/(sr·m²)'}   # watt per steradian per square metre
+                                                                         }},    # Radiance
+    {'type': 'IRRADIANCE',                          'id': 55,   'descr': {'str': 'Irradiance, Exitance, Radiosity',
+                                                                          'dlc': {0: {'l': 8, 't': 'measdata', 'd': 'Value'}},
+                                                                          'uni': {0: 'W/m²'}        # watt per square metre
+                                                                         }},    # Irradiance, Exitance, Radiosity
+    {'type': 'SPECTRAL_RADIANCE',                   'id': 56,   'descr': {'str': 'Spectral radiance',
+                                                                          'dlc': {0: {'l': 8, 't': 'measdata', 'd': 'Value'}},
+                                                                          'uni': {0: 'W·sr⁻¹·m⁻²·nm⁻¹', # watt per steradian per square metre per nanometre
+                                                                                  1: 'W·sr⁻¹·m⁻³',      # watt per steradian per square metre per metre
+                                                                                  2: 'W·sr⁻¹·m⁻²·Hz⁻¹'} # watt per steradian per square metre per hertz
+                                                                         }},    # Spectral radiance
+    {'type': 'SPECTRAL_IRRADIANCE',                 'id': 57,   'descr': {'str': 'Spectral irradiance',
+                                                                          'dlc': {0: {'l': 8, 't': 'measdata', 'd': 'Value'}},
+                                                                          'uni': {0: 'W·m⁻²·nm⁻¹',  # watt per square metre per nanometre
+                                                                                  1: 'W·m⁻³',       # watt per square metre per metre
+                                                                                  2: 'W·m⁻²·Hz⁻¹'}  # watt per square metre per hertz
+                                                                         }},    # Spectral irradiance
+    {'type': 'SOUND_PRESSURE',                      'id': 58,   'descr': {'str': 'Sound pressure (acoustic pressure)',
+                                                                          'dlc': {0: {'l': 8, 't': 'measdata', 'd': 'Value'}},
+                                                                          'uni': {0: 'Pa'}          # pascal
+                                                                         }},    # Sound pressure (acoustic pressure)
+    {'type': 'SOUND_DENSITY',                       'id': 59,   'descr': {'str': 'Sound energy density',
+                                                                          'dlc': {0: {'l': 8, 't': 'measdata', 'd': 'Value'}},
+                                                                          'uni': {0: 'Pa'}          # pascal
+                                                                         }},    # Sound energy density
+    {'type': 'SOUND_LEVEL',                         'id': 60,   'descr': {'str': 'Sound level',
+                                                                          'dlc': {0: {'l': 8, 't': 'measdata', 'd': 'Value'}},
+                                                                          'uni': {0: 'dB'}          # decibel
+                                                                         }},    # Sound level
+    {'type': 'DOSE_EQVIVALENT',                     'id': 61,   'descr': {'str': 'Radiation dose (equivalent)',
+                                                                          'dlc': {0: {'l': 8, 't': 'measdata', 'd': 'Value'}},
+                                                                          'uni': {0: 'Sv',          # sievert
+                                                                                  1: 'rem'}         # Röntgen equivalent in man (1 rem = 0.01 Sv)
+                                                                         }},    # Radiation dose (equivalent)
+    {'type': 'RADIATION_DOSE_EXPOSURE',             'id': 62,   'descr': {'str': 'Radiation dose (exposure)',
+                                                                          'dlc': {0: {'l': 8, 't': 'measdata', 'd': 'Value'}},
+                                                                          'uni': {0: 'C/kg',        # coulomb per kilogram
+                                                                                  1: 'R'}           # Röntgen
+                                                                         }},    # Radiation dose (exposure)
+    {'type': 'POWER_FACTOR',                        'id': 63,   'descr': {'str': 'Power factor',
+                                                                          'dlc': {0: {'l': 8, 't': 'measdata', 'd': 'Value'}},
+                                                                          'uni': {0: 'cos φ'}       # power factor
+                                                                         }},    # Power factor
+    {'type': 'REACTIVE_POWER',                      'id': 64,   'descr': {'str': 'Reactive Power',
+                                                                          'dlc': {0: {'l': 8, 't': 'measdata', 'd': 'Value'}},
+                                                                          'uni': {0: 'VAr'}         # reactive power
+                                                                         }},    # Reactive Power
+    {'type': 'REACTIVE_ENERGY',                     'id': 65,   'descr': {'str': 'Reactive Energy',
+                                                                          'dlc': {0: {'l': 8, 't': 'measdata', 'd': 'Value'}},
+                                                                          'uni': {0: 'kVArh'}       # reactive energy
+                                                                         }},    # Reactive Energy
 ]
 _class_1_measurement_x1 = [
     {'type': 'GENERAL',                             'id': 0,    'descr': {}},  # General event
