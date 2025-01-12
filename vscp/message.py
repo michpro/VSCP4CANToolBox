@@ -3,7 +3,7 @@
 import numpy as np
 import can
 import phy
-from .dictionary import Dictionary
+from .dictionary import dictionary
 
 
 VSCP_MSG_CLASS_SHIFT        = 16
@@ -17,16 +17,17 @@ VSCP_MSG_HARCODED_BIT_MASK  = 0x00000001 << VSCP_MSG_HARCODED_BIT_SHIFT
 VSCP_MSG_PRIORITY_SHIFT     = 26
 VSCP_MSG_PRIORITY_MASK      = 0x00000007 << VSCP_MSG_PRIORITY_SHIFT
 
+
 _messages: list = []
 _feeder_allowed: bool = False
+
 
 def feeder(msg: dict):
     if _feeder_allowed is True and msg['dir'] == 'RX':
         _messages.append(msg)
 
-class Message:
-    dictionary = Dictionary()
 
+class Message:
     def __init__(self) -> None:
         pass
 
@@ -39,9 +40,9 @@ class Message:
         priority    = int  ((can_id & VSCP_MSG_PRIORITY_MASK)       >> VSCP_MSG_PRIORITY_SHIFT)
 
         return {
-            'class':    {'id': vscp_class,  'name': self.dictionary.class_name(vscp_class)},
-            'type':     {'id': vscp_type,   'name': self.dictionary.type_name(vscp_class, vscp_type)},
-            'priority': {'id': priority,    'name': self.dictionary.priority_name(priority)},
+            'class':    {'id': vscp_class,  'name': dictionary.class_name(vscp_class)},
+            'type':     {'id': vscp_type,   'name': dictionary.type_name(vscp_class, vscp_type)},
+            'priority': {'id': priority,    'name': dictionary.priority_name(priority)},
             'nickName': nickname,
             'isHardCoded': hard_coded
             }
@@ -50,11 +51,12 @@ class Message:
     def prepare_id(self, msg: dict) -> np.uint32:
         result: np.uint32 = 0
         try:
-            vscp_class  = self.dictionary.class_id(msg['class']['name']) if msg['class']['name'] is not None else msg['class']['id']
-            vscp_type   = self.dictionary.type_id(vscp_class, msg['type']['name']) if msg['type']['name'] is not None else msg['type']['id']
+            vscp_class  = dictionary.class_id(msg['class']['name']) if msg['class']['name'] is not None else msg['class']['id']
+            vscp_type   = dictionary.type_id(vscp_class, msg['type']['name']) if msg['type']['name'] is not None else msg['type']['id']
+
             nickname    = msg['nickName']
             hard_coded  = 1 if msg['isHardCoded'] is True else 0
-            priority    = self.dictionary.priority_id(msg['priority']['name']) if msg['priority']['name'] is not None else msg['priority']['id']
+            priority    = dictionary.priority_id(msg['priority']['name']) if msg['priority']['name'] is not None else msg['priority']['id']
 
             result = np.uint32(   ((nickname    << VSCP_MSG_NICKNAME_SHIFT)     & VSCP_MSG_NICKNAME_MASK)
                                 | ((vscp_type   << VSCP_MSG_TYPE_SHIFT)         & VSCP_MSG_TYPE_MASK)

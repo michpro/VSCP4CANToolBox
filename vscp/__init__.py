@@ -1,6 +1,6 @@
 # pylint: disable=missing-module-docstring
 
-from vscp.dictionary import Dictionary
+from vscp.dictionary import dictionary
 from vscp.message import Message
 from vscp.callback import Callback
 from vscp.tools import  is_async_work, add_scan_progress_observer,      \

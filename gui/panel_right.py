@@ -5,7 +5,7 @@ import os
 import csv
 import customtkinter as ctk
 from CTkMessagebox import CTkMessagebox
-from vscp import Dictionary
+from vscp import dictionary
 from .treeview import CTkTreeview
 from .common import add_event_info_handle, event_info_handle
 from .popup import CTkFloatingWindow
@@ -102,7 +102,6 @@ class Messages(ctk.CTkFrame):
 class EventInfo(ctk.CTkFrame): # pylint: disable=too-few-public-methods
     def __init__(self, parent):
         self.parent = parent
-        self.dictionary = Dictionary()
         super().__init__(self.parent)
 
         font = ctk.CTkFont(family='Ubuntu Mono', size=16)
@@ -117,10 +116,10 @@ class EventInfo(ctk.CTkFrame): # pylint: disable=too-few-public-methods
         self.event_info.delete('1.0', 'end')
         if 0 != len(data):
             descr_len = 18
-            class_id = self.dictionary.class_id(data[4])
-            type_id = self.dictionary.type_id(class_id, data[5])
+            class_id = dictionary.class_id(data[4])
+            type_id = dictionary.type_id(class_id, data[5])
             dlc = [int(val, 0) for val in data[6].split()]
-            info = self.dictionary.parse_data(class_id, type_id, dlc)
+            info = dictionary.parse_data(class_id, type_id, dlc)
             val = ''
             for idx, item in enumerate(info):
                 val += item[0].ljust(descr_len)[:descr_len] if 0 != idx else item[0] + (os.linesep * 2)

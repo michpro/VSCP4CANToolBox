@@ -1,13 +1,16 @@
-# pylint: disable=line-too-long, missing-module-docstring, missing-class-docstring, missing-function-docstring
+# pylint: disable=too-many-lines, line-too-long, missing-module-docstring, missing-class-docstring, missing-function-docstring
 
 import os
+from copy import deepcopy
 from datetime import datetime
 from functools import singledispatchmethod
 from .utils import search
 
+
 UNKNOWN_VALUE = 65534
 UNKNOWN_NAME = "UNKNOWN"
 MULTILINE_INDENT = 18
+
 
 class Dictionary:
     def __init__(self) -> None:
@@ -531,7 +534,7 @@ class Dictionary:
         return result
 
 
-    def _convert_measurecoding(self, data: list, units: dict) -> dict:# TODO impl
+    def _convert_measurecoding(self, data: list, units: dict) -> dict:
         result = {'dataType':       'raw',
                   'unit':           '',
                   'sensorIndex':    0}
@@ -553,7 +556,6 @@ class Dictionary:
                 if isinstance(unit, dict):
                     result['unit'] = unit['u'] if 'u' in unit else ''
                     data_type = unit['t'] if 't' in unit else 'unknown'
-                    # print(data_type)
                 else:
                     result['unit'] = unit
                     data_type = formats[(val >> 5) & 0x07]
@@ -564,6 +566,7 @@ class Dictionary:
 
 
     def _convert_measurement_data(self, data: list, units: dict) -> str:
+        result = 'CONVERSION ERROR'
         if 1 < len(data):
             coding = self._convert_measurecoding([data[0]], units)
             try:
@@ -571,7 +574,43 @@ class Dictionary:
                 result += (' ' + coding['unit']) if '' != coding['unit'] else ''
                 result += os.linesep + f"{'Sensor index':<{MULTILINE_INDENT}}" + str(coding['sensorIndex'])
             except KeyError:
-                result = 'CONVERSION ERROR'
+                pass
+        return result
+
+
+    def _convert_measurement_zoned_data(self, data: list, units: dict) -> str:
+        result = 'CONVERSION ERROR'
+        if 5 <= len(data):
+            coding = self._convert_measurecoding([0x80], units) # coding: normalized int; unit: default
+            try:
+                result = self._convert(coding['dataType'], data[:5], {})
+                result += (' ' + coding['unit']) if '' != coding['unit'] else ''
+            except KeyError:
+                pass
+        return result
+
+
+    def _convert_measurement_32_data(self, data: list, units: dict) -> str:
+        result = 'CONVERSION ERROR'
+        if 4 <= len(data):
+            coding = self._convert_measurecoding([0xA0], units) # coding: float; unit: default
+            try:
+                result = self._convert(coding['dataType'], data[:4], {})
+                result += (' ' + coding['unit']) if '' != coding['unit'] else ''
+            except KeyError:
+                pass
+        return result
+
+
+    def _convert_measurement_64_data(self, data: list, units: dict) -> str:
+        result = 'CONVERSION ERROR'
+        if 8 == len(data):
+            coding = self._convert_measurecoding([0xC0], units) # coding: double; unit: default
+            try:
+                result = self._convert(coding['dataType'], data, {})
+                result += (' ' + coding['unit']) if '' != coding['unit'] else ''
+            except KeyError:
+                pass
         return result
 
 
@@ -677,6 +716,9 @@ class Dictionary:
                     'langcod':  self._convert_langcoding,
                     'pulsecod': self._convert_pulsetypecoding,
                     'measdata': self._convert_measurement_data,
+                    'measdatz': self._convert_measurement_zoned_data,
+                    'measdatf': self._convert_measurement_32_data,
+                    'measdatd': self._convert_measurement_64_data,
                     'measidx':  self._convert_measureindex,
                     'sensidx':  self._convert_sensorindex,
                     'channt':   self._convert_channeltype,
@@ -689,6 +731,42 @@ class Dictionary:
         if data_type not in func_map:
             data_type = 'raw'
         return func_map[data_type](data, units)
+
+
+def modify_dictionary(input_defs: list, option: str) -> list:
+    options = { 'none':    {'type_from':   '',
+                            'type_to':     '',
+                            'dlc_ins':     {}},
+                'addZone': {'type_from':    'measdata',
+                            'type_to':      'measdatz',
+                            'dlc_ins':     {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                            1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                            2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}},
+                'float':   {'type_from':    'measdata',
+                            'type_to':      'measdatf',
+                            'dlc_ins':     {}},
+                'double':  {'type_from':    'measdata',
+                            'type_to':      'measdatd',
+                            'dlc_ins':     {}}}
+    if not option in options:
+        option = 'none'
+    items = deepcopy(input_defs)
+    pos_move = len(options[option]['dlc_ins'])
+    for idx, item in enumerate(items):
+        if not 'descr' in item: continue # pylint: disable=multiple-statements
+        descr = item['descr']
+        if not 'dlc' in descr: continue # pylint: disable=multiple-statements
+        dlc = descr['dlc']
+        for pos in range(len(dlc)): # pylint: disable=consider-using-enumerate
+            if 'l' in dlc[pos]:
+                dlc[pos]['l'] = dlc[pos]['l'] - pos_move
+            if 't' in dlc[pos] and options[option]['type_from'] == dlc[pos]['t']:
+                dlc[pos]['t'] = options[option]['type_to']
+            dlc[pos + pos_move] = dlc.pop(pos)
+        temp_dlc = options[option]['dlc_ins']
+        temp_dlc.update(dlc)
+        items[idx]['descr']['dlc'] = temp_dlc
+    return items
 
 
 _vscp_priority = [
@@ -1152,7 +1230,7 @@ _class_1_measurement = [
     {'type': 'CHEMICAL_CONCENTRATION_MOLAR',        'id': 45,   'descr': {'str': 'Chemical (molar) concentration',
                                                                           'dlc': {0: {'l': 8, 't': 'measdata', 'd': 'Value'}},
                                                                           'uni': {0: 'mol/m³',      # mole per cubic meter
-                                                                                  1: 'ppm',         # parts-per-million 
+                                                                                  1: 'ppm',         # parts-per-million
                                                                                   2: '%'}           # percent
                                                                          }},    # Chemical (molar) concentration
     {'type': 'CHEMICAL_CONCENTRATION_MASS',         'id': 46,   'descr': {'str': 'Chemical (mass) concentration',
@@ -2075,22 +2153,22 @@ _class_1_aol = [
     {'type': 'UPDATE_BIOS_IMAGE',                   'id': 15,   'descr': {}},  # Update BIOS image
     {'type': 'UPDATE_DIAGNOSTIC_PROCEDURE',         'id': 16,   'descr': {}},  # Update Perform other diagnostic procedures
 ]
-_class_1_measurement_64 = _class_1_measurement
+_class_1_measurement_64 = modify_dictionary(_class_1_measurement, 'double')
 _class_1_measurement_64_x1 = _class_1_measurement_x1
 _class_1_measurement_64_x2 = _class_1_measurement_x2
 _class_1_measurement_64_x3 = _class_1_measurement_x3
 _class_1_measurement_64_x4 = _class_1_measurement_x4
-_class_1_measure_zone = _class_1_measurement
+_class_1_measure_zone = modify_dictionary(_class_1_measurement, 'addZone')
 _class_1_measure_zone_x1 = _class_1_measurement_x1
 _class_1_measure_zone_x2 = _class_1_measurement_x2
 _class_1_measure_zone_x3 = _class_1_measurement_x3
 _class_1_measure_zone_x4 = _class_1_measurement_x4
-_class_1_measurement_32 = _class_1_measurement
+_class_1_measurement_32 = modify_dictionary(_class_1_measurement, 'float')
 _class_1_measurement_32_x1 = _class_1_measurement_x1
 _class_1_measurement_32_x2 = _class_1_measurement_x2
 _class_1_measurement_32_x3 = _class_1_measurement_x3
 _class_1_measurement_32_x4 = _class_1_measurement_x4
-_class_1_set_value_zone = _class_1_measurement
+_class_1_set_value_zone = modify_dictionary(_class_1_measurement, 'addZone')
 _class_1_set_value_zone_x1 = _class_1_measurement_x1
 _class_1_set_value_zone_x2 = _class_1_measurement_x2
 _class_1_set_value_zone_x3 = _class_1_measurement_x3
@@ -2399,3 +2477,6 @@ _vscp_class_1_dict = [
     {'class': 'CLASS1.LABORATORY',          'id': 510,  'types': _class_1_laboratory},          # Laboratory use
     {'class': 'CLASS1.LOCAL',               'id': 511,  'types': _class_1_local}                # Local use
 ]
+
+
+dictionary = Dictionary()
