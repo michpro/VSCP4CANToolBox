@@ -477,6 +477,41 @@ class Dictionary:
         return result
 
 
+    def _convert_securevent(self, data: list, _) -> str:
+        result = 'Unknown'
+        if 0 < len(data):
+            results = {
+                0:  'Security event occurred',
+                1:  'Activated',
+                2:  'Inactivated',
+            }
+            result = results[data[0]] if data[0] in results else self._convert_int(data, _)
+        return result
+
+
+    def _convert_id_check_bits(self, data: list, _) -> str:
+        try:
+            val = int(data[0])
+            result = self._convert_bits(data, _)
+            bits = []
+            for idx in range (0, 2):
+                if val & (1 << idx):
+                    bits.append(idx)
+            bits_count = len(bits)
+            for idx in range(bits_count):
+                result += os.linesep + (' ' * MULTILINE_INDENT)
+                match bits[idx]:
+                    case 0:
+                        result += 'Authenticated'
+                    case 1:
+                        result += 'Authorized'
+                    case _:
+                        pass
+        except (ValueError, KeyError):
+            result = 'Unknown'
+        return result
+
+
     def _convert_timeunit(self, data: list, _) -> str:
         results = {
             0:  'Time in microseconds',
@@ -667,6 +702,24 @@ class Dictionary:
         return result
 
 
+    def _convert_loglevel(self, data: list, _) -> str:
+        result = 'Unknown'
+        if 0 < len(data):
+            results = {
+                0:  'Emergency',
+                1:  'Alert',
+                2:  'Critical',
+                3:  'Error',
+                4:  'Warning',
+                5:  'Notice',
+                6:  'Informational',
+                7:  'Debug',
+                8:  'Verbose',
+            }
+            result = results[data[0]] if data[0] in results else self._convert_int(data, _)
+        return result
+
+
     def _convert_ipv4(self, data: list, _) -> str:
         result = 'None' if 4 != len(data) else '.'.join(f'{(val & 0xFF):d}' for val in data)
         return result
@@ -712,6 +765,8 @@ class Dictionary:
                     'evbutt':   self._convert_evbutton,
                     'evtoken':  self._convert_evtoken,
                     'onoffst':  self._convert_onoffstate,
+                    'securevt': self._convert_securevent,
+                    'idchkbit': self._convert_id_check_bits,
                     'timeunit': self._convert_timeunit,
                     'langcod':  self._convert_langcoding,
                     'pulsecod': self._convert_pulsetypecoding,
@@ -723,6 +778,7 @@ class Dictionary:
                     'sensidx':  self._convert_sensorindex,
                     'channt':   self._convert_channeltype,
                     'coord':    self._convert_coord,
+                    'loglev':   self._convert_loglevel,
                     'ipv4':     self._convert_ipv4,
                     'raw':      self._convert_raw,
                     'ascii':    self._convert_ascii,
@@ -966,63 +1022,264 @@ _class_1_protocol = [
                                                                          }},    # Bootloader CHECK.
 ]
 _class_1_alarm = [
-    {'type': 'GENERAL',                             'id': 0,    'descr': {}},  # General event
-    {'type': 'WARNING',                             'id': 1,    'descr': {}},  # Warning
-    {'type': 'ALARM',                               'id': 2,    'descr': {}},  # Alarm occurred
-    {'type': 'SOUND',                               'id': 3,    'descr': {}},  # Alarm sound on/off
-    {'type': 'LIGHT',                               'id': 4,    'descr': {}},  # Alarm light on/off
-    {'type': 'POWER',                               'id': 5,    'descr': {}},  # Power on/off
-    {'type': 'EMERGENCY_STOP',                      'id': 6,    'descr': {}},  # Emergency Stop
-    {'type': 'EMERGENCY_PAUSE',                     'id': 7,    'descr': {}},  # Emergency Pause
-    {'type': 'EMERGENCY_RESET',                     'id': 8,    'descr': {}},  # Emergency Reset
-    {'type': 'EMERGENCY_RESUME',                    'id': 9,    'descr': {}},  # Emergency Resume
-    {'type': 'ARM',                                 'id': 10,   'descr': {}},  # Arm
-    {'type': 'DISARM',                              'id': 11,   'descr': {}},  # Disarm
-    {'type': 'WATCHDOG',                            'id': 12,   'descr': {}},  # Watchdog
-    {'type': 'RESET',                               'id': 13,   'descr': {}},  # Alarm reset
+    {'type': 'GENERAL',                             'id': 0,    'descr': {}},   # General event
+    {'type': 'WARNING',                             'id': 1,    'descr': {'str': 'Warning',
+                                                                          'dlc': {0: {'l': 1, 't': 'onoffst', 'd': 'State'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Warning
+    {'type': 'ALARM',                               'id': 2,    'descr': {'str': 'Alarm occurred',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Code'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Alarm occurred
+    {'type': 'SOUND',                               'id': 3,    'descr': {'str': 'Alarm sound on/off',
+                                                                          'dlc': {0: {'l': 1, 't': 'onoffst', 'd': 'State'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Alarm sound on/off
+    {'type': 'LIGHT',                               'id': 4,    'descr': {'str': 'Alarm light on/off',
+                                                                          'dlc': {0: {'l': 1, 't': 'onoffst', 'd': 'State'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Alarm light on/off
+    {'type': 'POWER',                               'id': 5,    'descr': {'str': 'Power on/off',
+                                                                          'dlc': {0: {'l': 1, 't': 'onoffst', 'd': 'State'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Power on/off
+    {'type': 'EMERGENCY_STOP',                      'id': 6,    'descr': {'str': 'Emergency Stop',
+                                                                          'dlc': {0: {'l': 1, 't': 'onoffst', 'd': 'State'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Emergency Stop
+    {'type': 'EMERGENCY_PAUSE',                     'id': 7,    'descr': {'str': 'Emergency Pause',
+                                                                          'dlc': {0: {'l': 1, 't': 'onoffst', 'd': 'State'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Emergency Pause
+    {'type': 'EMERGENCY_RESET',                     'id': 8,    'descr': {'str': 'Emergency Reset',
+                                                                          'dlc': {0: {'l': 1, 't': 'onoffst', 'd': 'State'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Emergency Reset
+    {'type': 'EMERGENCY_RESUME',                    'id': 9,    'descr': {'str': 'Emergency Resume',
+                                                                          'dlc': {0: {'l': 1, 't': 'onoffst', 'd': 'State'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},  # Emergency Resume
+    {'type': 'ARM',                                 'id': 10,   'descr': {'str': 'Arm',
+                                                                          'dlc': {0: {'l': 1, 't': 'onoffst', 'd': 'State'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Arm
+    {'type': 'DISARM',                              'id': 11,   'descr': {'str': 'Disarm',
+                                                                          'dlc': {0: {'l': 1, 't': 'onoffst', 'd': 'State'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Disarm
+    {'type': 'WATCHDOG',                            'id': 12,   'descr': {'str': 'Watchdog',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Watchdog
+    {'type': 'RESET',                               'id': 13,   'descr': {'str': 'Alarm reset',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Code'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Alarm reset
 ]
 _class_1_security = [
-    {'type': 'GENERAL',                             'id': 0,    'descr': {}},  # General event
-    {'type': 'MOTION',                              'id': 1,    'descr': {}},  # Motion Detect
-    {'type': 'GLASS_BREAK',                         'id': 2,    'descr': {}},  # Glass break
-    {'type': 'BEAM_BREAK',                          'id': 3,    'descr': {}},  # Beam break
-    {'type': 'SENSOR_TAMPER',                       'id': 4,    'descr': {}},  # Sensor tamper
-    {'type': 'SHOCK_SENSOR',                        'id': 5,    'descr': {}},  # Shock sensor
-    {'type': 'SMOKE_SENSOR',                        'id': 6,    'descr': {}},  # Smoke sensor
-    {'type': 'HEAT_SENSOR',                         'id': 7,    'descr': {}},  # Heat sensor
-    {'type': 'PANIC_SWITCH',                        'id': 8,    'descr': {}},  # Panic switch
-    {'type': 'DOOR_OPEN',                           'id': 9,    'descr': {}},  # Door Contact
-    {'type': 'WINDOW_OPEN',                         'id': 10,   'descr': {}},  # Window Contact
-    {'type': 'CO_SENSOR',                           'id': 11,   'descr': {}},  # CO Sensor
-    {'type': 'FROST_DETECTED',                      'id': 12,   'descr': {}},  # Frost detected
-    {'type': 'FLAME_DETECTED',                      'id': 13,   'descr': {}},  # Flame detected
-    {'type': 'OXYGEN_LOW',                          'id': 14,   'descr': {}},  # Oxygen Low
-    {'type': 'WEIGHT_DETECTED',                     'id': 15,   'descr': {}},  # Weight detected.
-    {'type': 'WATER_DETECTED',                      'id': 16,   'descr': {}},  # Water detected.
-    {'type': 'CONDENSATION_DETECTED',               'id': 17,   'descr': {}},  # Condensation detected.
-    {'type': 'SOUND_DETECTED',                      'id': 18,   'descr': {}},  # Noise (sound) detected.
-    {'type': 'HARMFUL_SOUND_LEVEL',                 'id': 19,   'descr': {}},  # Harmful sound levels detected.
-    {'type': 'TAMPER',                              'id': 20,   'descr': {}},  # Tamper detected.
-    {'type': 'AUTHENTICATED',                       'id': 21,   'descr': {}},  # Authenticated
-    {'type': 'UNAUTHENTICATED',                     'id': 22,   'descr': {}},  # Unauthenticated
-    {'type': 'AUTHORIZED',                          'id': 23,   'descr': {}},  # Authorized
-    {'type': 'UNAUTHORIZED',                        'id': 24,   'descr': {}},  # Unauthorized
-    {'type': 'ID_CHECK',                            'id': 25,   'descr': {}},  # ID check
-    {'type': 'PIN_OK',                              'id': 26,   'descr': {}},  # Valid pin
-    {'type': 'PIN_FAIL',                            'id': 27,   'descr': {}},  # Invalid pin
-    {'type': 'PIN_WARNING',                         'id': 28,   'descr': {}},  # Pin warning
-    {'type': 'PIN_ERROR',                           'id': 29,   'descr': {}},  # Pin error
-    {'type': 'PASSWORD_OK',                         'id': 30,   'descr': {}},  # Valid password
-    {'type': 'PASSWORD_FAIL',                       'id': 31,   'descr': {}},  # Invalid password
-    {'type': 'PASSWORD_WARNING',                    'id': 32,   'descr': {}},  # Password warning
-    {'type': 'PASSWORD_ERROR',                      'id': 33,   'descr': {}},  # Password error
-    {'type': 'GAS_SENSOR',                          'id': 34,   'descr': {}},  # Gas
-    {'type': 'IN_MOTION_DETECTED',                  'id': 35,   'descr': {}},  # In motion
-    {'type': 'NOT_IN_MOTION_DETECTED',              'id': 36,   'descr': {}},  # Not in motion
-    {'type': 'VIBRATION_DETECTED',                  'id': 37,   'descr': {}},  # Vibration
+    {'type': 'GENERAL',                             'id': 0,    'descr': {}},   # General event
+    {'type': 'MOTION',                              'id': 1,    'descr': {'str': 'Motion Detect',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 1, 't': 'securevt', 'd': 'Status'}}
+                                                                         }},    # Motion Detect
+    {'type': 'GLASS_BREAK',                         'id': 2,    'descr': {'str': 'Glass break',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Glass break
+    {'type': 'BEAM_BREAK',                          'id': 3,    'descr': {'str': 'Beam break',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Beam break
+    {'type': 'SENSOR_TAMPER',                       'id': 4,    'descr': {'str': 'Sensor tamper',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Sensor tamper
+    {'type': 'SHOCK_SENSOR',                        'id': 5,    'descr': {'str': 'Shock sensor',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Shock sensor
+    {'type': 'SMOKE_SENSOR',                        'id': 6,    'descr': {'str': 'Smoke sensor',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Smoke sensor
+    {'type': 'HEAT_SENSOR',                         'id': 7,    'descr': {'str': 'Heat sensor',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Heat sensor
+    {'type': 'PANIC_SWITCH',                        'id': 8,    'descr': {'str': 'Panic switch',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Panic switch
+    {'type': 'DOOR_OPEN',                           'id': 9,    'descr': {'str': 'Door Contact',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Door Contact
+    {'type': 'WINDOW_OPEN',                         'id': 10,   'descr': {'str': 'Window Contact',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Window Contact
+    {'type': 'CO_SENSOR',                           'id': 11,   'descr': {'str': 'CO Sensor',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # CO Sensor
+    {'type': 'FROST_DETECTED',                      'id': 12,   'descr': {'str': 'Frost detected',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Frost detected
+    {'type': 'FLAME_DETECTED',                      'id': 13,   'descr': {'str': 'Flame detected',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Flame detected
+    {'type': 'OXYGEN_LOW',                          'id': 14,   'descr': {'str': 'Oxygen Low',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Oxygen Low
+    {'type': 'WEIGHT_DETECTED',                     'id': 15,   'descr': {'str': 'Weight detected',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Weight detected
+    {'type': 'WATER_DETECTED',                      'id': 16,   'descr': {'str': 'Water detected',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Water detected
+    {'type': 'CONDENSATION_DETECTED',               'id': 17,   'descr': {'str': 'Condensation detected',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Condensation detected
+    {'type': 'SOUND_DETECTED',                      'id': 18,   'descr': {'str': 'Noise (sound) detected',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Noise (sound) detected
+    {'type': 'HARMFUL_SOUND_LEVEL',                 'id': 19,   'descr': {'str': 'Harmful sound levels detected',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Harmful sound levels detected
+    {'type': 'TAMPER',                              'id': 20,   'descr': {'str': 'Tamper detected',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Tamper detected
+    {'type': 'AUTHENTICATED',                       'id': 21,   'descr': {'str': 'Authenticated',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Authenticated
+    {'type': 'UNAUTHENTICATED',                     'id': 22,   'descr': {'str': 'Unauthenticated',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Unauthenticated
+    {'type': 'AUTHORIZED',                          'id': 23,   'descr': {'str': 'Authorized',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Authorized
+    {'type': 'UNAUTHORIZED',                        'id': 24,   'descr': {'str': 'Unauthorized',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Unauthorized
+    {'type': 'ID_CHECK',                            'id': 25,   'descr': {'str': 'ID check',
+                                                                          'dlc': {0: {'l': 1, 't': 'idchkbit', 'd': 'ID check bits'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # ID check
+    {'type': 'PIN_OK',                              'id': 26,   'descr': {'str': 'Valid pin',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Valid pin
+    {'type': 'PIN_FAIL',                            'id': 27,   'descr': {'str': 'Invalid pin',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Invalid pin
+    {'type': 'PIN_WARNING',                         'id': 28,   'descr': {'str': 'Pin warning',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Pin warning
+    {'type': 'PIN_ERROR',                           'id': 29,   'descr': {'str': 'Pin error',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Pin error
+    {'type': 'PASSWORD_OK',                         'id': 30,   'descr': {'str': 'Valid password',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Valid password
+    {'type': 'PASSWORD_FAIL',                       'id': 31,   'descr': {'str': 'Invalid password',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Invalid password
+    {'type': 'PASSWORD_WARNING',                    'id': 32,   'descr': {'str': 'Password warning',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Password warning
+    {'type': 'PASSWORD_ERROR',                      'id': 33,   'descr': {'str': 'Password error',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Password error
+    {'type': 'GAS_SENSOR',                          'id': 34,   'descr': {'str': 'Gas has been detected',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Gas
+    {'type': 'IN_MOTION_DETECTED',                  'id': 35,   'descr': {'str': 'In motion',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # In motion
+    {'type': 'NOT_IN_MOTION_DETECTED',              'id': 36,   'descr': {'str': 'Not in motion',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Not in motion
+    {'type': 'VIBRATION_DETECTED',                  'id': 37,   'descr': {'str': 'Vibration detected',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'User specified'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Vibration
 ]
 _class_1_measurement = [
-    {'type': 'GENERAL',                             'id': 0,    'descr': {}},  # General event
+    {'type': 'GENERAL',                             'id': 0,    'descr': {}},   # General event
     {'type': 'COUNT',                               'id': 1,    'descr': {'str': 'Count',
                                                                           'dlc': {0: {'l': 8, 't': 'measdata', 'd': 'Value'}},
                                                                           'uni': {}                 # no unit
@@ -2135,23 +2392,87 @@ _class_1_multimedia = [
     {'type': 'CONTROL_RESPONSE',                    'id': 61,   'descr': {}},  # Multimedia Control response
 ]
 _class_1_aol = [
-    {'type': 'GENERAL',                             'id': 0,    'descr': {}},  # General event
-    {'type': 'UNPLUGGED_POWER',                     'id': 1,    'descr': {}},  # System unplugged from power source
-    {'type': 'UNPLUGGED_LAN',                       'id': 2,    'descr': {}},  # System unplugged from network
-    {'type': 'CHASSIS_INTRUSION',                   'id': 3,    'descr': {}},  # Chassis intrusion
-    {'type': 'PROCESSOR_REMOVAL',                   'id': 4,    'descr': {}},  # Processor removal
-    {'type': 'ENVIRONMENT_ERROR',                   'id': 5,    'descr': {}},  # System environmental errors
-    {'type': 'HIGH_TEMPERATURE',                    'id': 6,    'descr': {}},  # High temperature
-    {'type': 'FAN_SPEED',                           'id': 7,    'descr': {}},  # Fan speed problem
-    {'type': 'VOLTAGE_FLUCTUATIONS',                'id': 8,    'descr': {}},  # Voltage fluctuations
-    {'type': 'OS_ERROR',                            'id': 9,    'descr': {}},  # Operating system errors
-    {'type': 'POWER_ON_ERROR',                      'id': 10,   'descr': {}},  # System power-on error
-    {'type': 'SYSTEM_HUNG',                         'id': 11,   'descr': {}},  # System is hung
-    {'type': 'COMPONENT_FAILURE',                   'id': 12,   'descr': {}},  # Component failure
-    {'type': 'REBOOT_UPON_FAILURE',                 'id': 13,   'descr': {}},  # Remote system reboot upon report of a critical failure
-    {'type': 'REPAIR_OPERATING_SYSTEM',             'id': 14,   'descr': {}},  # Repair Operating System
-    {'type': 'UPDATE_BIOS_IMAGE',                   'id': 15,   'descr': {}},  # Update BIOS image
-    {'type': 'UPDATE_DIAGNOSTIC_PROCEDURE',         'id': 16,   'descr': {}},  # Update Perform other diagnostic procedures
+    {'type': 'GENERAL',                             'id': 0,    'descr': {}},   # General event
+    {'type': 'UNPLUGGED_POWER',                     'id': 1,    'descr': {'str': 'System unplugged from power source',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index for record'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # System unplugged from power source
+    {'type': 'UNPLUGGED_LAN',                       'id': 2,    'descr': {'str': 'System unplugged from network',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index for record'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # System unplugged from network
+    {'type': 'CHASSIS_INTRUSION',                   'id': 3,    'descr': {'str': 'Chassis intrusion',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index for record'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Chassis intrusion
+    {'type': 'PROCESSOR_REMOVAL',                   'id': 4,    'descr': {'str': 'Processor removal',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index for record'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Processor removal
+    {'type': 'ENVIRONMENT_ERROR',                   'id': 5,    'descr': {'str': 'System environmental errors',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index for record'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # System environmental errors
+    {'type': 'HIGH_TEMPERATURE',                    'id': 6,    'descr': {'str': 'High temperature',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index for record'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # High temperature
+    {'type': 'FAN_SPEED',                           'id': 7,    'descr': {'str': 'Fan speed problem',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index for record'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Fan speed problem
+    {'type': 'VOLTAGE_FLUCTUATIONS',                'id': 8,    'descr': {'str': 'Voltage fluctuations',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index for record'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Voltage fluctuations
+    {'type': 'OS_ERROR',                            'id': 9,    'descr': {'str': 'Operating system errors',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index for record'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Operating system errors
+    {'type': 'POWER_ON_ERROR',                      'id': 10,   'descr': {'str': 'System power-on error',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index for record'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # System power-on error
+    {'type': 'SYSTEM_HUNG',                         'id': 11,   'descr': {'str': 'System is hung',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index for record'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # System is hung
+    {'type': 'COMPONENT_FAILURE',                   'id': 12,   'descr': {'str': 'Component failure',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index for record'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Component failure
+    {'type': 'REBOOT_UPON_FAILURE',                 'id': 13,   'descr': {'str': 'Remote system reboot upon report of a critical failure',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index for record'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Remote system reboot upon report of a critical failure
+    {'type': 'REPAIR_OPERATING_SYSTEM',             'id': 14,   'descr': {'str': 'Repair Operating System',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index for record'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Repair Operating System
+    {'type': 'UPDATE_BIOS_IMAGE',                   'id': 15,   'descr': {'str': 'Update BIOS image',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index for record'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Update BIOS image
+    {'type': 'UPDATE_DIAGNOSTIC_PROCEDURE',         'id': 16,   'descr': {'str': 'Update Perform other diagnostic procedures',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index for record'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Update Perform other diagnostic procedures
 ]
 _class_1_measurement_64 = modify_dictionary(_class_1_measurement, 'double')
 _class_1_measurement_64_x1 = _class_1_measurement_x1
@@ -2174,59 +2495,268 @@ _class_1_set_value_zone_x2 = _class_1_measurement_x2
 _class_1_set_value_zone_x3 = _class_1_measurement_x3
 _class_1_set_value_zone_x4 = _class_1_measurement_x4
 _class_1_weather = [
-    {'type': 'GENERAL',                             'id': 0,    'descr': {}},  # General event
-    {'type': 'SEASONS_WINTER',                      'id': 1,    'descr': {}},  # Season winter
-    {'type': 'SEASONS_SPRING',                      'id': 2,    'descr': {}},  # Season spring
-    {'type': 'SEASONS_SUMMER',                      'id': 3,    'descr': {}},  # Season summer
-    {'type': 'SEASONS_AUTUMN',                      'id': 4,    'descr': {}},  # Autumn summer
-    {'type': 'WIND_NONE',                           'id': 5,    'descr': {}},  # No wind
-    {'type': 'WIND_LOW',                            'id': 6,    'descr': {}},  # Low wind
-    {'type': 'WIND_MEDIUM',                         'id': 7,    'descr': {}},  # Medium wind
-    {'type': 'WIND_HIGH',                           'id': 8,    'descr': {}},  # High wind
-    {'type': 'WIND_VERY_HIGH',                      'id': 9,    'descr': {}},  # Very high wind
-    {'type': 'AIR_FOGGY',                           'id': 10,   'descr': {}},  # Air foggy
-    {'type': 'AIR_FREEZING',                        'id': 11,   'descr': {}},  # Air freezing
-    {'type': 'AIR_VERY_COLD',                       'id': 12,   'descr': {}},  # Air Very cold
-    {'type': 'AIR_COLD',                            'id': 13,   'descr': {}},  # Air cold
-    {'type': 'AIR_NORMAL',                          'id': 14,   'descr': {}},  # Air normal
-    {'type': 'AIR_HOT',                             'id': 15,   'descr': {}},  # Air hot
-    {'type': 'AIR_VERY_HOT',                        'id': 16,   'descr': {}},  # Air very hot
-    {'type': 'AIR_POLLUTION_LOW',                   'id': 17,   'descr': {}},  # Pollution low
-    {'type': 'AIR_POLLUTION_MEDIUM',                'id': 18,   'descr': {}},  # Pollution medium
-    {'type': 'AIR_POLLUTION_HIGH',                  'id': 19,   'descr': {}},  # Pollution high
-    {'type': 'AIR_HUMID',                           'id': 20,   'descr': {}},  # Air humid
-    {'type': 'AIR_DRY',                             'id': 21,   'descr': {}},  # Air dry
-    {'type': 'SOIL_HUMID',                          'id': 22,   'descr': {}},  # Soil humid
-    {'type': 'SOIL_DRY',                            'id': 23,   'descr': {}},  # Soil dry
-    {'type': 'RAIN_NONE',                           'id': 24,   'descr': {}},  # Rain none
-    {'type': 'RAIN_LIGHT',                          'id': 25,   'descr': {}},  # Rain light
-    {'type': 'RAIN_HEAVY',                          'id': 26,   'descr': {}},  # Rain heavy
-    {'type': 'RAIN_VERY_HEAVY',                     'id': 27,   'descr': {}},  # Rain very heavy
-    {'type': 'SUN_NONE',                            'id': 28,   'descr': {}},  # Sun none
-    {'type': 'SUN_LIGHT',                           'id': 29,   'descr': {}},  # Sun light
-    {'type': 'SUN_HEAVY',                           'id': 30,   'descr': {}},  # Sun heavy
-    {'type': 'SNOW_NONE',                           'id': 31,   'descr': {}},  # Snow none
-    {'type': 'SNOW_LIGHT',                          'id': 32,   'descr': {}},  # Snow light
-    {'type': 'SNOW_HEAVY',                          'id': 33,   'descr': {}},  # Snow heavy
-    {'type': 'DEW_POINT',                           'id': 34,   'descr': {}},  # Dew point
-    {'type': 'STORM',                               'id': 35,   'descr': {}},  # Storm
-    {'type': 'FLOOD',                               'id': 36,   'descr': {}},  # Flood
-    {'type': 'EARTHQUAKE',                          'id': 37,   'descr': {}},  # Earthquake
-    {'type': 'NUCLEAR_DISASTER',                    'id': 38,   'descr': {}},  # Nuclear disaster
-    {'type': 'FIRE',                                'id': 39,   'descr': {}},  # Fire
-    {'type': 'LIGHTNING',                           'id': 40,   'descr': {}},  # Lightning
-    {'type': 'UV_RADIATION_LOW',                    'id': 41,   'descr': {}},  # UV Radiation low
-    {'type': 'UV_RADIATION_MEDIUM',                 'id': 42,   'descr': {}},  # UV Radiation medium
-    {'type': 'UV_RADIATION_NORMAL',                 'id': 43,   'descr': {}},  # UV Radiation normal
-    {'type': 'UV_RADIATION_HIGH',                   'id': 44,   'descr': {}},  # UV Radiation high
-    {'type': 'UV_RADIATION_VERY_HIGH',              'id': 45,   'descr': {}},  # UV Radiation very high
-    {'type': 'WARNING_LEVEL1',                      'id': 46,   'descr': {}},  # Warning level 1
-    {'type': 'WARNING_LEVEL2',                      'id': 47,   'descr': {}},  # Warning level 2
-    {'type': 'WARNING_LEVEL3',                      'id': 48,   'descr': {}},  # Warning level 3
-    {'type': 'WARNING_LEVEL4',                      'id': 49,   'descr': {}},  # Warning level 4
-    {'type': 'WARNING_LEVEL5',                      'id': 50,   'descr': {}},  # Warning level 5
-    {'type': 'ARMAGEDON',                           'id': 51,   'descr': {}},  # Armageddon
-    {'type': 'UV_INDEX',                            'id': 52,   'descr': {}},  # UV Index
+    {'type': 'GENERAL',                             'id': 0,    'descr': {}},   # General event
+    {'type': 'SEASONS_WINTER',                      'id': 1,    'descr': {'str': 'Season winter',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Season winter
+    {'type': 'SEASONS_SPRING',                      'id': 2,    'descr': {'str': 'Season spring',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Season spring
+    {'type': 'SEASONS_SUMMER',                      'id': 3,    'descr': {'str': 'Season summer',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Season summer
+    {'type': 'SEASONS_AUTUMN',                      'id': 4,    'descr': {'str': 'Season autumn',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Season autumn
+    {'type': 'WIND_NONE',                           'id': 5,    'descr': {'str': 'No wind',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # No wind
+    {'type': 'WIND_LOW',                            'id': 6,    'descr': {'str': 'Low wind',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Low wind
+    {'type': 'WIND_MEDIUM',                         'id': 7,    'descr': {'str': 'Medium wind',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Medium wind
+    {'type': 'WIND_HIGH',                           'id': 8,    'descr': {'str': 'High wind',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # High wind
+    {'type': 'WIND_VERY_HIGH',                      'id': 9,    'descr': {'str': 'Very high wind',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Very high wind
+    {'type': 'AIR_FOGGY',                           'id': 10,   'descr': {'str': 'Air foggy',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Air foggy
+    {'type': 'AIR_FREEZING',                        'id': 11,   'descr': {'str': 'Air freezing',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Air freezing
+    {'type': 'AIR_VERY_COLD',                       'id': 12,   'descr': {'str': 'Air Very cold',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Air Very cold
+    {'type': 'AIR_COLD',                            'id': 13,   'descr': {'str': 'Air cold',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Air cold
+    {'type': 'AIR_NORMAL',                          'id': 14,   'descr': {'str': 'Air normal',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Air normal
+    {'type': 'AIR_HOT',                             'id': 15,   'descr': {'str': 'Air hot',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Air hot
+    {'type': 'AIR_VERY_HOT',                        'id': 16,   'descr': {'str': 'Air very hot',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Air very hot
+    {'type': 'AIR_POLLUTION_LOW',                   'id': 17,   'descr': {'str': 'Pollution low',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Pollution low
+    {'type': 'AIR_POLLUTION_MEDIUM',                'id': 18,   'descr': {'str': 'Pollution medium',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Pollution medium
+    {'type': 'AIR_POLLUTION_HIGH',                  'id': 19,   'descr': {'str': 'Pollution high',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Pollution high
+    {'type': 'AIR_HUMID',                           'id': 20,   'descr': {'str': 'Air humid',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Air humid
+    {'type': 'AIR_DRY',                             'id': 21,   'descr': {'str': 'Air dry',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Air dry
+    {'type': 'SOIL_HUMID',                          'id': 22,   'descr': {'str': 'Soil humid',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Soil humid
+    {'type': 'SOIL_DRY',                            'id': 23,   'descr': {'str': 'Soil dry',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Soil dry
+    {'type': 'RAIN_NONE',                           'id': 24,   'descr': {'str': 'Rain none',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Rain none
+    {'type': 'RAIN_LIGHT',                          'id': 25,   'descr': {'str': 'Rain light',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},  # Rain light
+    {'type': 'RAIN_HEAVY',                          'id': 26,   'descr': {'str': 'Rain heavy',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Rain heavy
+    {'type': 'RAIN_VERY_HEAVY',                     'id': 27,   'descr': {'str': 'Rain very heavy',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Rain very heavy
+    {'type': 'SUN_NONE',                            'id': 28,   'descr': {'str': 'Sun none',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Sun none
+    {'type': 'SUN_LIGHT',                           'id': 29,   'descr': {'str': 'Sun light',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Sun light
+    {'type': 'SUN_HEAVY',                           'id': 30,   'descr': {'str': 'Sun heavy',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Sun heavy
+    {'type': 'SNOW_NONE',                           'id': 31,   'descr': {'str': 'Snow none',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Snow none
+    {'type': 'SNOW_LIGHT',                          'id': 32,   'descr': {'str': 'Snow light',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Snow light
+    {'type': 'SNOW_HEAVY',                          'id': 33,   'descr': {'str': 'Snow heavy',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Snow heavy
+    {'type': 'DEW_POINT',                           'id': 34,   'descr': {'str': 'Dew point',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Dew point
+    {'type': 'STORM',                               'id': 35,   'descr': {'str': 'Storm',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Storm
+    {'type': 'FLOOD',                               'id': 36,   'descr': {'str': 'Flood',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Flood
+    {'type': 'EARTHQUAKE',                          'id': 37,   'descr': {'str': 'Earthquake',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Earthquake
+    {'type': 'NUCLEAR_DISASTER',                    'id': 38,   'descr': {'str': 'Nuclear disaster',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Nuclear disaster
+    {'type': 'FIRE',                                'id': 39,   'descr': {'str': 'Fire',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Fire
+    {'type': 'LIGHTNING',                           'id': 40,   'descr': {'str': 'Lightning',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Lightning
+    {'type': 'UV_RADIATION_LOW',                    'id': 41,   'descr': {'str': 'UV Radiation low',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # UV Radiation low
+    {'type': 'UV_RADIATION_MEDIUM',                 'id': 42,   'descr': {'str': 'UV Radiation medium',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # UV Radiation medium
+    {'type': 'UV_RADIATION_NORMAL',                 'id': 43,   'descr': {'str': 'UV Radiation normal',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # UV Radiation normal
+    {'type': 'UV_RADIATION_HIGH',                   'id': 44,   'descr': {'str': 'UV Radiation high',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # UV Radiation high
+    {'type': 'UV_RADIATION_VERY_HIGH',              'id': 45,   'descr': {'str': 'UV Radiation very high',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # UV Radiation very high
+    {'type': 'WARNING_LEVEL1',                      'id': 46,   'descr': {'str': 'Warning level 1',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Warning level 1
+    {'type': 'WARNING_LEVEL2',                      'id': 47,   'descr': {'str': 'Warning level 2',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Warning level 2
+    {'type': 'WARNING_LEVEL3',                      'id': 48,   'descr': {'str': 'Warning level 3',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Warning level 3
+    {'type': 'WARNING_LEVEL4',                      'id': 49,   'descr': {'str': 'Warning level 4',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Warning level 4
+    {'type': 'WARNING_LEVEL5',                      'id': 50,   'descr': {'str': 'Warning level 5',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Warning level 5
+    {'type': 'ARMAGEDON',                           'id': 51,   'descr': {'str': 'Armageddon',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Armageddon
+    {'type': 'UV_INDEX',                            'id': 52,   'descr': {'str': 'UV Index',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 1, 't': 'uint', 'd': 'UV Index (0-15)'}}
+                                                                         }},    # UV Index
 ]
 _class_1_weather_forecast = _class_1_weather
 _class_1_phone = [
@@ -2283,144 +2813,757 @@ _class_1_configuration = [
     {'type': 'SET_PARAMETER_NACK',                  'id': 33,   'descr': {}},  # Set paramter negative acknowledge
 ]
 _class_1_gnss = [
-    {'type': 'GENERAL',                             'id': 0,    'descr': {}},  # General event
-    {'type': 'POSITION',                            'id': 1,    'descr': {}},  # Position
-    {'type': 'SATELLITES',                          'id': 2,    'descr': {}},  # Satellites
+    {'type': 'GENERAL',                             'id': 0,    'descr': {}},   # General event
+    {'type': 'POSITION',                            'id': 1,    'descr': {'str': 'Position',
+                                                                          'dlc': {0: {'l': 4, 't': 'float', 'd': 'Latitude'},
+                                                                                  1: {'l': 4, 't': 'float', 'd': 'Longitude'}}
+                                                                         }},    # Position
+    {'type': 'SATELLITES',                          'id': 2,    'descr': {'str': 'Satellites',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Count'}}
+                                                                         }},    # Satellites
 ]
 _class_1_wireless = [
-    {'type': 'GENERAL',                             'id': 0,    'descr': {}},  # General event
-    {'type': 'GSM_CELL',                            'id': 1,    'descr': {}},  # GSM Cell
+    {'type': 'GENERAL',                             'id': 0,    'descr': {}},   # General event
+    {'type': 'GSM_CELL',                            'id': 1,    'descr': {'str': 'GSM Cell',
+                                                                          'dlc': {0: {'l': 8, 't': 'hexint', 'd': 'Cell ID'}}
+                                                                         }},    # GSM Cell
 ]
 _class_1_diagnostic = [
-    {'type': 'GENERAL',                             'id': 0,    'descr': {}},  # General event
-    {'type': 'OVERVOLTAGE',                         'id': 1,    'descr': {}},  # Overvoltage
-    {'type': 'UNDERVOLTAGE',                        'id': 2,    'descr': {}},  # Undervoltage
-    {'type': 'VBUS_LOW',                            'id': 3,    'descr': {}},  # USB VBUS low
-    {'type': 'BATTERY_LOW',                         'id': 4,    'descr': {}},  # Battery voltage low
-    {'type': 'BATTERY_FULL',                        'id': 5,    'descr': {}},  # Battery full voltage
-    {'type': 'BATTERY_ERROR',                       'id': 6,    'descr': {}},  # Battery error
-    {'type': 'BATTERY_OK',                          'id': 7,    'descr': {}},  # Battery OK
-    {'type': 'OVERCURRENT',                         'id': 8,    'descr': {}},  # Over current
-    {'type': 'CIRCUIT_ERROR',                       'id': 9,    'descr': {}},  # Circuit error
-    {'type': 'SHORT_CIRCUIT',                       'id': 10,   'descr': {}},  # Short circuit
-    {'type': 'OPEN_CIRCUIT',                        'id': 11,   'descr': {}},  # Open Circuit
-    {'type': 'MOIST',                               'id': 12,   'descr': {}},  # Moist
-    {'type': 'WIRE_FAIL',                           'id': 13,   'descr': {}},  # Wire failure
-    {'type': 'WIRELESS_FAIL',                       'id': 14,   'descr': {}},  # Wireless faliure
-    {'type': 'IR_FAIL',                             'id': 15,   'descr': {}},  # IR failure
-    {'type': '1WIRE_FAIL',                          'id': 16,   'descr': {}},  # 1-wire failure
-    {'type': 'RS222_FAIL',                          'id': 17,   'descr': {}},  # RS-222 failure
-    {'type': 'RS232_FAIL',                          'id': 18,   'descr': {}},  # RS-232 failure
-    {'type': 'RS423_FAIL',                          'id': 19,   'descr': {}},  # RS-423 failure
-    {'type': 'RS485_FAIL',                          'id': 20,   'descr': {}},  # RS-485 failure
-    {'type': 'CAN_FAIL',                            'id': 21,   'descr': {}},  # CAN failure
-    {'type': 'LAN_FAIL',                            'id': 22,   'descr': {}},  # LAN failure
-    {'type': 'USB_FAIL',                            'id': 23,   'descr': {}},  # USB failure
-    {'type': 'WIFI_FAIL',                           'id': 24,   'descr': {}},  # Wifi failure
-    {'type': 'NFC_RFID_FAIL',                       'id': 25,   'descr': {}},  # NFC/RFID failure
-    {'type': 'LOW_SIGNAL',                          'id': 26,   'descr': {}},  # Low signal
-    {'type': 'HIGH_SIGNAL',                         'id': 27,   'descr': {}},  # High signal
-    {'type': 'ADC_FAIL',                            'id': 28,   'descr': {}},  # ADC failure
-    {'type': 'ALU_FAIL',                            'id': 29,   'descr': {}},  # ALU failure
-    {'type': 'ASSERT',                              'id': 30,   'descr': {}},  # Assert
-    {'type': 'DAC_FAIL',                            'id': 31,   'descr': {}},  # DAC failure
-    {'type': 'DMA_FAIL',                            'id': 32,   'descr': {}},  # DMA failure
-    {'type': 'ETH_FAIL',                            'id': 33,   'descr': {}},  # Ethernet failure
-    {'type': 'EXCEPTION',                           'id': 34,   'descr': {}},  # Exception
-    {'type': 'FPU_FAIL',                            'id': 35,   'descr': {}},  # FPU failure
-    {'type': 'GPIO_FAIL',                           'id': 36,   'descr': {}},  # GPIO failure
-    {'type': 'I2C_FAIL',                            'id': 37,   'descr': {}},  # I2C failure
-    {'type': 'I2S_FAIL',                            'id': 38,   'descr': {}},  # I2S failure
-    {'type': 'INVALID_CONFIG',                      'id': 39,   'descr': {}},  # Invalid configuration
-    {'type': 'MMU_FAIL',                            'id': 40,   'descr': {}},  # MMU failure
-    {'type': 'NMI',                                 'id': 41,   'descr': {}},  # NMI failure
-    {'type': 'OVERHEAT',                            'id': 42,   'descr': {}},  # Overheat
-    {'type': 'PLL_FAIL',                            'id': 43,   'descr': {}},  # PLL fail
-    {'type': 'POR_FAIL',                            'id': 44,   'descr': {}},  # POR failure
-    {'type': 'PWM_FAIL',                            'id': 45,   'descr': {}},  # PWM failure
-    {'type': 'RAM_FAIL',                            'id': 46,   'descr': {}},  # RAM failure
-    {'type': 'ROM_FAIL',                            'id': 47,   'descr': {}},  # ROM failure
-    {'type': 'SPI_FAIL',                            'id': 48,   'descr': {}},  # SPI failure
-    {'type': 'STACK_FAIL',                          'id': 49,   'descr': {}},  # Stack failure
-    {'type': 'LIN_FAIL',                            'id': 50,   'descr': {}},  # LIN bus failure
-    {'type': 'UART_FAIL',                           'id': 51,   'descr': {}},  # UART failure
-    {'type': 'UNHANDLED_INT',                       'id': 52,   'descr': {}},  # Unhandled interrupt
-    {'type': 'MEMORY_FAIL',                         'id': 53,   'descr': {}},  # Memory failure
-    {'type': 'VARIABLE_RANGE',                      'id': 54,   'descr': {}},  # Variable range failure
-    {'type': 'WDT',                                 'id': 55,   'descr': {}},  # WDT failure
-    {'type': 'EEPROM_FAIL',                         'id': 56,   'descr': {}},  # EEPROM failure
-    {'type': 'ENCRYPTION_FAIL',                     'id': 57,   'descr': {}},  # Encryption failure
-    {'type': 'BAD_USER_INPUT',                      'id': 58,   'descr': {}},  # Bad user input failure
-    {'type': 'DECRYPTION_FAIL',                     'id': 59,   'descr': {}},  # Decryption failure
-    {'type': 'NOISE',                               'id': 60,   'descr': {}},  # Noise
-    {'type': 'BOOTLOADER_FAIL',                     'id': 61,   'descr': {}},  # Boot loader failure
-    {'type': 'PROGRAMFLOW_FAIL',                    'id': 62,   'descr': {}},  # Program flow failure
-    {'type': 'RTC_FAIL',                            'id': 63,   'descr': {}},  # RTC faiure
-    {'type': 'SYSTEM_TEST_FAIL',                    'id': 64,   'descr': {}},  # System test failure
-    {'type': 'SENSOR_FAIL',                         'id': 65,   'descr': {}},  # Sensor failure
-    {'type': 'SAFESTATE',                           'id': 66,   'descr': {}},  # Safe state entered
-    {'type': 'SIGNAL_IMPLAUSIBLE',                  'id': 67,   'descr': {}},  # Signal implausible
-    {'type': 'STORAGE_FAIL',                        'id': 68,   'descr': {}},  # Storage fail
-    {'type': 'SELFTEST_FAIL',                       'id': 69,   'descr': {}},  # Self test OK
-    {'type': 'ESD_EMC_EMI',                         'id': 70,   'descr': {}},  # ESD/EMC/EMI failure
-    {'type': 'TIMEOUT',                             'id': 71,   'descr': {}},  # Timeout
-    {'type': 'LCD_FAIL',                            'id': 72,   'descr': {}},  # LCD failure
-    {'type': 'TOUCHPANEL_FAIL',                     'id': 73,   'descr': {}},  # Touch panel failure
-    {'type': 'NOLOAD',                              'id': 74,   'descr': {}},  # No load
-    {'type': 'COOLING_FAIL',                        'id': 75,   'descr': {}},  # Cooling failure
-    {'type': 'HEATING_FAIL',                        'id': 76,   'descr': {}},  # Heating failure
-    {'type': 'TX_FAIL',                             'id': 77,   'descr': {}},  # Transmission failure
-    {'type': 'RX_FAIL',                             'id': 78,   'descr': {}},  # Receiption failure
-    {'type': 'EXT_IC_FAIL',                         'id': 79,   'descr': {}},  # External IC failure
-    {'type': 'CHARGING_ON',                         'id': 80,   'descr': {}},  # Charging of battery or similar has started or is in progress
-    {'type': 'CHARGING_OFF',                        'id': 81,   'descr': {}},  # Charging of battery or similar has ended
+    {'type': 'GENERAL',                             'id': 0,    'descr': {}},   # General event
+    {'type': 'OVERVOLTAGE',                         'id': 1,    'descr': {'str': 'Overvoltage',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Overvoltage
+    {'type': 'UNDERVOLTAGE',                        'id': 2,    'descr': {'str': 'Undervoltage',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Undervoltage
+    {'type': 'VBUS_LOW',                            'id': 3,    'descr': {'str': 'USB VBUS low',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # USB VBUS low
+    {'type': 'BATTERY_LOW',                         'id': 4,    'descr': {'str': 'Battery voltage low',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Battery voltage low
+    {'type': 'BATTERY_FULL',                        'id': 5,    'descr': {'str': 'Battery full voltage',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Battery full voltage
+    {'type': 'BATTERY_ERROR',                       'id': 6,    'descr': {'str': 'Battery error',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Battery error
+    {'type': 'BATTERY_OK',                          'id': 7,    'descr': {'str': 'Battery OK',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Battery OK
+    {'type': 'OVERCURRENT',                         'id': 8,    'descr': {'str': 'Over current',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Over current
+    {'type': 'CIRCUIT_ERROR',                       'id': 9,    'descr': {'str': 'Circuit error',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Circuit error
+    {'type': 'SHORT_CIRCUIT',                       'id': 10,   'descr': {'str': 'Short circuit',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Short circuit
+    {'type': 'OPEN_CIRCUIT',                        'id': 11,   'descr': {'str': 'Open Circuit',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Open Circuit
+    {'type': 'MOIST',                               'id': 12,   'descr': {'str': 'Moist',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Moist
+    {'type': 'WIRE_FAIL',                           'id': 13,   'descr': {'str': 'Wire failure',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Wire failure
+    {'type': 'WIRELESS_FAIL',                       'id': 14,   'descr': {'str': 'Wireless faliure',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Wireless faliure
+    {'type': 'IR_FAIL',                             'id': 15,   'descr': {'str': 'IR failure',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # IR failure
+    {'type': '1WIRE_FAIL',                          'id': 16,   'descr': {'str': '1-wire failure',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # 1-wire failure
+    {'type': 'RS222_FAIL',                          'id': 17,   'descr': {'str': 'RS-222 failure',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # RS-222 failure
+    {'type': 'RS232_FAIL',                          'id': 18,   'descr': {'str': 'RS-232 failure',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # RS-232 failure
+    {'type': 'RS423_FAIL',                          'id': 19,   'descr': {'str': 'RS-423 failure',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # RS-423 failure
+    {'type': 'RS485_FAIL',                          'id': 20,   'descr': {'str': 'RS-485 failure',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # RS-485 failure
+    {'type': 'CAN_FAIL',                            'id': 21,   'descr': {'str': 'CAN failure',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # CAN failure
+    {'type': 'LAN_FAIL',                            'id': 22,   'descr': {'str': 'LAN failure',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # LAN failure
+    {'type': 'USB_FAIL',                            'id': 23,   'descr': {'str': 'USB failure',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # USB failure
+    {'type': 'WIFI_FAIL',                           'id': 24,   'descr': {'str': 'Wifi failure',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Wifi failure
+    {'type': 'NFC_RFID_FAIL',                       'id': 25,   'descr': {'str': 'NFC/RFID failure',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # NFC/RFID failure
+    {'type': 'LOW_SIGNAL',                          'id': 26,   'descr': {'str': 'Low signal',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Low signal
+    {'type': 'HIGH_SIGNAL',                         'id': 27,   'descr': {'str': 'High signal',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # High signal
+    {'type': 'ADC_FAIL',                            'id': 28,   'descr': {'str': 'ADC failure',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # ADC failure
+    {'type': 'ALU_FAIL',                            'id': 29,   'descr': {'str': 'ALU failure',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # ALU failure
+    {'type': 'ASSERT',                              'id': 30,   'descr': {'str': 'Assert',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Assert
+    {'type': 'DAC_FAIL',                            'id': 31,   'descr': {'str': 'DAC failure',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # DAC failure
+    {'type': 'DMA_FAIL',                            'id': 32,   'descr': {'str': 'DMA failure',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # DMA failure
+    {'type': 'ETH_FAIL',                            'id': 33,   'descr': {'str': 'Ethernet failure',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Ethernet failure
+    {'type': 'EXCEPTION',                           'id': 34,   'descr': {'str': 'Exception',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Exception
+    {'type': 'FPU_FAIL',                            'id': 35,   'descr': {'str': 'FPU failure',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # FPU failure
+    {'type': 'GPIO_FAIL',                           'id': 36,   'descr': {'str': 'GPIO failure',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # GPIO failure
+    {'type': 'I2C_FAIL',                            'id': 37,   'descr': {'str': 'I2C failure',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # I2C failure
+    {'type': 'I2S_FAIL',                            'id': 38,   'descr': {'str': 'I2S failure',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # I2S failure
+    {'type': 'INVALID_CONFIG',                      'id': 39,   'descr': {'str': 'Invalid configuration',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Invalid configuration
+    {'type': 'MMU_FAIL',                            'id': 40,   'descr': {'str': 'MMU failure',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # MMU failure
+    {'type': 'NMI',                                 'id': 41,   'descr': {'str': 'NMI failure',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # NMI failure
+    {'type': 'OVERHEAT',                            'id': 42,   'descr': {'str': 'Overheat',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Overheat
+    {'type': 'PLL_FAIL',                            'id': 43,   'descr': {'str': 'PLL fail',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # PLL fail
+    {'type': 'POR_FAIL',                            'id': 44,   'descr': {'str': 'POR failure',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # POR failure
+    {'type': 'PWM_FAIL',                            'id': 45,   'descr': {'str': 'PWM failure',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # PWM failure
+    {'type': 'RAM_FAIL',                            'id': 46,   'descr': {'str': 'RAM failure',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # RAM failure
+    {'type': 'ROM_FAIL',                            'id': 47,   'descr': {'str': 'ROM failure',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # ROM failure
+    {'type': 'SPI_FAIL',                            'id': 48,   'descr': {'str': 'SPI failure',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # SPI failure
+    {'type': 'STACK_FAIL',                          'id': 49,   'descr': {'str': 'Stack failure',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Stack failure
+    {'type': 'LIN_FAIL',                            'id': 50,   'descr': {'str': 'LIN bus failure',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # LIN bus failure
+    {'type': 'UART_FAIL',                           'id': 51,   'descr': {'str': 'UART failure',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # UART failure
+    {'type': 'UNHANDLED_INT',                       'id': 52,   'descr': {'str': 'Unhandled interrupt',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Unhandled interrupt
+    {'type': 'MEMORY_FAIL',                         'id': 53,   'descr': {'str': 'Memory failure',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Memory failure
+    {'type': 'VARIABLE_RANGE',                      'id': 54,   'descr': {'str': 'Variable range failure',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Variable range failure
+    {'type': 'WDT',                                 'id': 55,   'descr': {'str': 'WDT failure',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # WDT failure
+    {'type': 'EEPROM_FAIL',                         'id': 56,   'descr': {'str': 'EEPROM failure',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # EEPROM failure
+    {'type': 'ENCRYPTION_FAIL',                     'id': 57,   'descr': {'str': 'Encryption failure',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Encryption failure
+    {'type': 'BAD_USER_INPUT',                      'id': 58,   'descr': {'str': 'Bad user input failure',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Bad user input failure
+    {'type': 'DECRYPTION_FAIL',                     'id': 59,   'descr': {'str': 'Decryption failure',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Decryption failure
+    {'type': 'NOISE',                               'id': 60,   'descr': {'str': 'Noise',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Noise
+    {'type': 'BOOTLOADER_FAIL',                     'id': 61,   'descr': {'str': 'Boot loader failure',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Boot loader failure
+    {'type': 'PROGRAMFLOW_FAIL',                    'id': 62,   'descr': {'str': 'Program flow failure',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Program flow failure
+    {'type': 'RTC_FAIL',                            'id': 63,   'descr': {'str': 'RTC faiure',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # RTC faiure
+    {'type': 'SYSTEM_TEST_FAIL',                    'id': 64,   'descr': {'str': 'System test failure',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # System test failure
+    {'type': 'SENSOR_FAIL',                         'id': 65,   'descr': {'str': 'Sensor failure',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Sensor failure
+    {'type': 'SAFESTATE',                           'id': 66,   'descr': {'str': 'Safe state entered',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Safe state entered
+    {'type': 'SIGNAL_IMPLAUSIBLE',                  'id': 67,   'descr': {'str': 'Signal implausible',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Signal implausible
+    {'type': 'STORAGE_FAIL',                        'id': 68,   'descr': {'str': 'Storage fail',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Storage fail
+    {'type': 'SELFTEST_FAIL',                       'id': 69,   'descr': {'str': 'Self test OK',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Self test OK
+    {'type': 'ESD_EMC_EMI',                         'id': 70,   'descr': {'str': 'ESD/EMC/EMI failure',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},  # ESD/EMC/EMI failure
+    {'type': 'TIMEOUT',                             'id': 71,   'descr': {'str': 'Timeout',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Timeout
+    {'type': 'LCD_FAIL',                            'id': 72,   'descr': {'str': 'LCD failure',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # LCD failure
+    {'type': 'TOUCHPANEL_FAIL',                     'id': 73,   'descr': {'str': 'Touch panel failure',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Touch panel failure
+    {'type': 'NOLOAD',                              'id': 74,   'descr': {'str': 'No load',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # No load
+    {'type': 'COOLING_FAIL',                        'id': 75,   'descr': {'str': 'Cooling failure',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Cooling failure
+    {'type': 'HEATING_FAIL',                        'id': 76,   'descr': {'str': 'Heating failure',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Heating failure
+    {'type': 'TX_FAIL',                             'id': 77,   'descr': {'str': 'Transmission failure',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Transmission failure
+    {'type': 'RX_FAIL',                             'id': 78,   'descr': {'str': 'Receiption failure',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Receiption failure
+    {'type': 'EXT_IC_FAIL',                         'id': 79,   'descr': {'str': 'External IC failure',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # External IC failure
+    {'type': 'CHARGING_ON',                         'id': 80,   'descr': {'str': 'Charging of battery or similar has started or in progress',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Charging of battery or similar has started or is in progress
+    {'type': 'CHARGING_OFF',                        'id': 81,   'descr': {'str': 'Charging of battery or similar has ended',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Charging of battery or similar has ended
 ]
 _class_1_error = [
-    {'type': 'SUCCESS',                             'id': 0,    'descr': {}},  # Success
-    {'type': 'ERROR',                               'id': 1,    'descr': {}},  # Error
-    {'type': 'CHANNEL',                             'id': 7,    'descr': {}},  # Channel error
-    {'type': 'FIFO_EMPTY',                          'id': 8,    'descr': {}},  # Fifo empty error
-    {'type': 'FIFO_FULL',                           'id': 9,    'descr': {}},  # Fifo full error
-    {'type': 'FIFO_SIZE',                           'id': 10,   'descr': {}},  # Fifo size error
-    {'type': 'FIFO_WAIT',                           'id': 11,   'descr': {}},  # Fifo wait error
-    {'type': 'GENERIC',                             'id': 12,   'descr': {}},  # Generic error
-    {'type': 'HARDWARE',                            'id': 13,   'descr': {}},  # Hardware error
-    {'type': 'INIT_FAIL',                           'id': 14,   'descr': {}},  # initialization error
-    {'type': 'INIT_MISSING',                        'id': 15,   'descr': {}},  # Missing initialization error
-    {'type': 'INIT_READY',                          'id': 16,   'descr': {}},  # Initialization ready
-    {'type': 'NOT_SUPPORTED',                       'id': 17,   'descr': {}},  # Not supported
-    {'type': 'OVERRUN',                             'id': 18,   'descr': {}},  # Overrun error
-    {'type': 'RCV_EMPTY',                           'id': 19,   'descr': {}},  # Receiver empty error
-    {'type': 'REGISTER',                            'id': 20,   'descr': {}},  # Register error
-    {'type': 'TRM_FULL',                            'id': 21,   'descr': {}},  # Transmitter full error
-    {'type': 'LIBRARY',                             'id': 28,   'descr': {}},  # Library error
-    {'type': 'PROCADDRESS',                         'id': 29,   'descr': {}},  # Procedural address error
-    {'type': 'ONLY_ONE_INSTANCE',                   'id': 30,   'descr': {}},  # Only one instance error
-    {'type': 'SUB_DRIVER',                          'id': 31,   'descr': {}},  # Sub driver error
-    {'type': 'TIMEOUT',                             'id': 32,   'descr': {}},  # Timeout error
-    {'type': 'NOT_OPEN',                            'id': 33,   'descr': {}},  # Not open error
-    {'type': 'PARAMETER',                           'id': 34,   'descr': {}},  # Parameter error
-    {'type': 'MEMORY',                              'id': 35,   'descr': {}},  # Memory error
-    {'type': 'INTERNAL',                            'id': 36,   'descr': {}},  # Internal error
-    {'type': 'COMMUNICATION',                       'id': 37,   'descr': {}},  # Communication error
-    {'type': 'USER',                                'id': 38,   'descr': {}},  # User error
-    {'type': 'PASSWORD',                            'id': 39,   'descr': {}},  # Password error
-    {'type': 'CONNECTION',                          'id': 40,   'descr': {}},  # Connection error
-    {'type': 'INVALID_HANDLE',                      'id': 41,   'descr': {}},  # Invalid handle error
-    {'type': 'OPERATION_FAILED',                    'id': 42,   'descr': {}},  # Operation failed error
-    {'type': 'BUFFER_SMALL',                        'id': 43,   'descr': {}},  # Supplied buffer is to small to fit content
-    {'type': 'ITEM_UNKNOWN',                        'id': 44,   'descr': {}},  # Requested item is unknown
-    {'type': 'NAME_USED',                           'id': 45,   'descr': {}},  # Name is already in use
-    {'type': 'DATA_WRITE',                          'id': 46,   'descr': {}},  # Error when writing data
-    {'type': 'ABORTED',                             'id': 47,   'descr': {}},  # Operation stopped or aborted
-    {'type': 'INVALID_POINTER',                     'id': 48,   'descr': {}},  # Pointer with invalid value
+    {'type': 'SUCCESS',                             'id': 0,    'descr': {'str': 'Success',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Success
+    {'type': 'ERROR',                               'id': 1,    'descr': {'str': 'Error',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Error
+    {'type': 'CHANNEL',                             'id': 7,    'descr': {'str': 'Channel error',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Channel error
+    {'type': 'FIFO_EMPTY',                          'id': 8,    'descr': {'str': 'Fifo empty error',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Fifo empty error
+    {'type': 'FIFO_FULL',                           'id': 9,    'descr': {'str': 'Fifo full error',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Fifo full error
+    {'type': 'FIFO_SIZE',                           'id': 10,   'descr': {'str': 'Fifo size error',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Fifo size error
+    {'type': 'FIFO_WAIT',                           'id': 11,   'descr': {'str': 'Fifo wait error',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Fifo wait error
+    {'type': 'GENERIC',                             'id': 12,   'descr': {'str': 'Generic error',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Generic error
+    {'type': 'HARDWARE',                            'id': 13,   'descr': {'str': 'Hardware error',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Hardware error
+    {'type': 'INIT_FAIL',                           'id': 14,   'descr': {'str': 'Initialization error',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # initialization error
+    {'type': 'INIT_MISSING',                        'id': 15,   'descr': {'str': 'Missing initialization error',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Missing initialization error
+    {'type': 'INIT_READY',                          'id': 16,   'descr': {'str': 'Initialization ready',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Initialization ready
+    {'type': 'NOT_SUPPORTED',                       'id': 17,   'descr': {'str': 'Not supported',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Not supported
+    {'type': 'OVERRUN',                             'id': 18,   'descr': {'str': 'Overrun error',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Overrun error
+    {'type': 'RCV_EMPTY',                           'id': 19,   'descr': {'str': 'Receiver empty error',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Receiver empty error
+    {'type': 'REGISTER',                            'id': 20,   'descr': {'str': 'Register error',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Register error
+    {'type': 'TRM_FULL',                            'id': 21,   'descr': {'str': 'Transmitter full error',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Transmitter full error
+    {'type': 'LIBRARY',                             'id': 28,   'descr': {'str': 'Library error',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Library error
+    {'type': 'PROCADDRESS',                         'id': 29,   'descr': {'str': 'Procedural address error',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Procedural address error
+    {'type': 'ONLY_ONE_INSTANCE',                   'id': 30,   'descr': {'str': 'Only one instance error',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Only one instance error
+    {'type': 'SUB_DRIVER',                          'id': 31,   'descr': {'str': 'Sub driver error',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Sub driver error
+    {'type': 'TIMEOUT',                             'id': 32,   'descr': {'str': 'Timeout error',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Timeout error
+    {'type': 'NOT_OPEN',                            'id': 33,   'descr': {'str': 'Not open error',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Not open error
+    {'type': 'PARAMETER',                           'id': 34,   'descr': {'str': 'Parameter error',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Parameter error
+    {'type': 'MEMORY',                              'id': 35,   'descr': {'str': 'Memory error',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Memory error
+    {'type': 'INTERNAL',                            'id': 36,   'descr': {'str': 'Internal error',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Internal error
+    {'type': 'COMMUNICATION',                       'id': 37,   'descr': {'str': 'Communication error',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Communication error
+    {'type': 'USER',                                'id': 38,   'descr': {'str': 'User error',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # User error
+    {'type': 'PASSWORD',                            'id': 39,   'descr': {'str': 'Password error',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Password error
+    {'type': 'CONNECTION',                          'id': 40,   'descr': {'str': 'Connection error',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Connection error
+    {'type': 'INVALID_HANDLE',                      'id': 41,   'descr': {'str': 'nvalid handle error',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Invalid handle error
+    {'type': 'OPERATION_FAILED',                    'id': 42,   'descr': {'str': 'Operation failed error',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Operation failed error
+    {'type': 'BUFFER_SMALL',                        'id': 43,   'descr': {'str': 'Supplied buffer is to small to fit content',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Supplied buffer is to small to fit content
+    {'type': 'ITEM_UNKNOWN',                        'id': 44,   'descr': {'str': 'Requested item is unknown',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Requested item is unknown
+    {'type': 'NAME_USED',                           'id': 45,   'descr': {'str': 'Name is already in use',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Name is already in use
+    {'type': 'DATA_WRITE',                          'id': 46,   'descr': {'str': 'Error when writing data',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Error when writing data
+    {'type': 'ABORTED',                             'id': 47,   'descr': {'str': 'Operation stopped or aborted',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Operation stopped or aborted
+    {'type': 'INVALID_POINTER',                     'id': 48,   'descr': {'str': 'Pointer with invalid value',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'hexint', 'd': 'User specific'}}
+                                                                         }},    # Pointer with invalid value
 ]
 _class_1_log = [
-    {'type': 'GENERAL',                             'id': 0,    'descr': {}},  # General event
-    {'type': 'MESSAGE',                             'id': 1,    'descr': {}},  # Log event
-    {'type': 'START',                               'id': 2,    'descr': {}},  # Log Start
-    {'type': 'STOP',                                'id': 3,    'descr': {}},  # Log Stop
-    {'type': 'LEVEL',                               'id': 4,    'descr': {}},  # Log Level
+    {'type': 'GENERAL',                             'id': 0,    'descr': {}},   # General event
+    {'type': 'MESSAGE',                             'id': 1,    'descr': {'str': 'Log event',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Event ID'},
+                                                                                  1: {'l': 1, 't': 'loglev', 'd': 'Msg. log level'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'Msg. index'},
+                                                                                  3: {'l': 5, 't': 'ascii', 'd': 'Message'}}
+                                                                         }},    # Log event
+    {'type': 'START',                               'id': 2,    'descr': {'str': 'Start logging',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Log ID'}}
+                                                                         }},    # Log Start
+    {'type': 'STOP',                                'id': 3,    'descr': {'str': 'Stop logging',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Log ID'}}
+                                                                         }},    # Log Stop
+    {'type': 'LEVEL',                               'id': 4,    'descr': {'str': 'Set level for logging',
+                                                                          'dlc': {0: {'l': 1, 't': 'loglev', 'd': 'Level'}}
+                                                                         }},    # Log Level
 
 ]
 _class_1_laboratory = [
