@@ -149,6 +149,14 @@ class Dictionary:
         return f'0x{val:0{width}X}'
 
 
+    def _convert_combined_ints(self, data: list, _) -> str:
+        indent = os.linesep + (' ' * MULTILINE_INDENT)
+        result_hex  =          f'{"HEX":<6}'  + self._convert_hexint(data, _)
+        result_int  = indent + f'{"int":<6}'  + self._convert_int(data, _)
+        result_uint = indent + f'{"uint":<6}' + self._convert_uint(data, _)
+        return result_hex + result_int + result_uint
+
+
     def _convert_normalizedint(self, data: list, _) -> str:
         result = ''
         if 1 < len(data):
@@ -477,6 +485,255 @@ class Dictionary:
         return result
 
 
+    def _convert_ledaction(self, data: list, _) -> str:
+        try:
+            results = {
+                0:  'OFF',
+                1:  'ON',
+                2:  'BLINK',
+            }
+            val = int(data[0])
+            result = results[val]
+        except (ValueError, KeyError):
+            result = 'Unknown'
+        return result
+
+
+    def _convert_playbackfunction(self, data: list, _) -> str:
+        try:
+            results = {
+                0:  'Stop',
+                1:  'Pause',
+                2:  'Play',
+                3:  'Forward',
+                4:  'Rewind',
+                5:  'Fast Forward',
+                6:  'Fast Rewind',
+                7:  'Next Track',
+                30: 'Previous Track',
+                31: 'Toggle repeat mode',
+                32: 'Repeat mode ON',
+                33: 'Repeat mode OFF',
+                34: 'Toggle Shuffle mode',
+                35: 'Shuffle ON',
+                36: 'Shuffle mode OFF',
+                37: 'Fade in, Play',
+                38: 'Fade out, Stop',
+            }
+            val = int(data[0])
+            result = results[val]
+        except (ValueError, KeyError):
+            result = 'Unknown'
+        return result
+
+
+    def _convert_navigationfunction(self, data: list, _) -> str:
+        try:
+            results = {
+                10: '+10',
+                20: 'OK',
+                21: 'Left',
+                22: 'Right',
+                23: 'Up',
+                24: 'Down',
+                25: 'Menu',
+                26: 'Selecting',
+            }
+            for idx in range(10):
+                results[idx] = f'{idx:d}'
+            chars = (*range(65, 91), *range(97, 123))
+            for idx in chars:
+                results[idx] = chr(idx)
+            val = int(data[0])
+            result = results[val]
+        except (ValueError, KeyError):
+            result = 'Unknown'
+        return result
+
+
+    def _convert_screenformat(self, data: list, _) -> str:
+        try:
+            results = {
+                0:  'Auto',
+                1:  'Just',
+                2:  'Normal',
+                3:  'Zoom',
+            }
+            val = int(data[0])
+            result = results[val]
+        except (ValueError, KeyError):
+            result = 'Unknown'
+        return result
+
+
+    def _convert_devicecode_input(self, data: list, _) -> str:
+        try:
+            val = int(data[0])
+        except ValueError:
+            val = 0xFF
+        results = {
+            0:  'Auto',
+            1:  'CD',
+            2:  'AUX',
+            3:  'DVD',
+            4:  'SAT',
+            5:  'VCR',
+            6:  'Tape',
+            7:  'Phone',
+            8:  'Tuner',
+            9:  'FM',
+            10: 'AM',
+            11: 'Radio',
+            16: 'Component',
+            17: 'VGA',
+            18: 'SVideo',
+            19: 'Video1',
+            20: 'Video2',
+            21: 'Video3',
+            22: 'Sat1',
+            23: 'Sat2',
+            24: 'Sat3',
+            25: 'mp3 source',
+            26: 'mpeg source',
+        }
+        result = results[val] if val in results else f'0x{val:02X}'
+        return result
+
+
+    def _convert_devicecode_output(self, data: list, _) -> str:
+        try:
+            val = int(data[0])
+        except ValueError:
+            val = 0xFF
+        results = {
+            0:  'Auto',
+            16: 'Component',
+            17: 'VGA',
+            18: 'SVideo',
+            19: 'Video1',
+            20: 'Video2',
+            21: 'Video3',
+            30: 'HDMI1',
+            31: 'HDMI2',
+            32: 'HDMI3',
+        }
+        result = results[val] if val in results else f'0x{val:02X}'
+        return result
+
+
+    def _convert_recording_control(self, data: list, _) -> str:
+        try:
+            results = {
+                0:  'Start recording',
+                1:  'Stop recording',
+                2:  'Disable AGC',
+                3:  'Enable AGC',
+            }
+            val = int(data[0])
+            result = results[val]
+        except (ValueError, KeyError):
+            result = 'Unknown'
+        return result
+
+
+    def _convert_tivocode(self, data: list, _) -> str:
+        try:
+            results = {
+                1:  'Box Office',
+                2:  'Services',
+                3:  'Program Guide',
+                4:  'Text',
+                5:  'Info',
+                6:  'Help',
+                7:  'Backup',
+                20: 'Red key',
+                21: 'Yellow key',
+                22: 'Green key',
+                23: 'Blue key',
+                24: 'White key',
+                25: 'Black key',
+            }
+            val = int(data[0])
+            result = results[val]
+        except (ValueError, KeyError):
+            result = 'Unknown'
+        return result
+
+
+    def _convert_media_information(self, data: list, _) -> str:
+        try:
+            results = {
+                0:  'Current Title',
+                1:  'Get Folders',
+                2:  'Get Disks',
+                3:  'Get Tracks',
+                4:  'Get Albums/Play lists',
+                5:  'Get Channels',
+                6:  'Get Pages',
+                7:  'Get Chapters',
+            }
+            val = int(data[0])
+            result = results[val]
+        except (ValueError, KeyError):
+            result = 'Unknown'
+        return result
+
+
+    def _convert_multimedia_control(self, data: list, _) -> str:
+        try:
+            results = {
+                0:  'Active Title',
+                1:  'Set Title',
+                2:  'Active Folder',
+                3:  'Set Active Folder',
+                4:  'Artist',
+                5:  'Year',
+                6:  'Genre',
+                7:  'Album',
+                8:  'Comment',
+                9:  'Track',
+                10: 'Picture',
+                11: 'Sample rate',
+                12: 'Bit-rate',
+                13: 'Channels',
+                14: 'Media size bytes',
+                15: 'Time',
+                16: 'Mpeg version',
+                17: 'Mpeg layer',
+                18: 'Frequency',
+                19: 'Channel Mode',
+                20: 'CRC',
+                21: 'Copyright',
+                22: 'Original',
+                23: 'Emphasis',
+                24: 'Media position in milliseconds',
+                25: 'Media-length in milliseconds',
+                26: 'Version',
+                27: 'Album/Play list',
+                28: 'Play file',
+                29: 'Add file to album/play-list',
+                30: 'Current Folder',
+                31: 'Folder content',
+                32: 'Set Folder',
+                33: 'Get Folder content',
+                34: 'Get Folder content albums/play-lists',
+                35: 'Get Folder content filter',
+                36: 'Disks list',
+                37: 'Folders list',
+                38: 'Tracks list',
+                39: 'Albums/Play list list',
+                40: 'Channels list',
+                41: 'Pages list',
+                42: 'Chapters list',
+                43: 'New Album/Play list',
+            }
+            val = int(data[0])
+            result = results[val]
+        except (ValueError, KeyError):
+            result = 'Unknown'
+        return result
+
+
     def _convert_securevent(self, data: list, _) -> str:
         result = 'Unknown'
         if 0 < len(data):
@@ -509,6 +766,17 @@ class Dictionary:
                         pass
         except (ValueError, KeyError):
             result = 'Unknown'
+        return result
+
+
+    def _convert_config_status(self, data: list, _) -> str:
+        result = ''
+        try:
+            val = int(data[0])
+            if val & (1 << 7):
+                result = 'Reboot device after config loaded'
+        except ValueError:
+            pass
         return result
 
 
@@ -677,7 +945,7 @@ class Dictionary:
         return result
 
 
-    def _convert_channeltype(self, data: list, _) -> str:
+    def _convert_changecode(self, data: list, _) -> str:
         try:
             val = int(data[0], )
         except ValueError:
@@ -746,6 +1014,7 @@ class Dictionary:
                     'uint':     self._convert_uint,
                     'ruint':    self._convert_ruint,
                     'hexint':   self._convert_hexint,
+                    'combints': self._convert_combined_ints,
                     'normint':  self._convert_normalizedint,
                     'float':    self._convert_float,
                     'double':   self._convert_double,
@@ -765,8 +1034,19 @@ class Dictionary:
                     'evbutt':   self._convert_evbutton,
                     'evtoken':  self._convert_evtoken,
                     'onoffst':  self._convert_onoffstate,
+                    'ledact':   self._convert_ledaction,
+                    'pbfunc':   self._convert_playbackfunction,
+                    'navkey':   self._convert_navigationfunction,
+                    'scrform':  self._convert_screenformat,
+                    'devcodi':  self._convert_devicecode_input,
+                    'devcodo':  self._convert_devicecode_output,
+                    'recfunc':  self._convert_recording_control,
+                    'tivocod':  self._convert_tivocode,
+                    'medinfo':  self._convert_media_information,
+                    'mmedcont': self._convert_multimedia_control,
                     'securevt': self._convert_securevent,
                     'idchkbit': self._convert_id_check_bits,
+                    'confstat': self._convert_config_status,
                     'timeunit': self._convert_timeunit,
                     'langcod':  self._convert_langcoding,
                     'pulsecod': self._convert_pulsetypecoding,
@@ -776,7 +1056,7 @@ class Dictionary:
                     'measdatd': self._convert_measurement_64_data,
                     'measidx':  self._convert_measureindex,
                     'sensidx':  self._convert_sensorindex,
-                    'channt':   self._convert_channeltype,
+                    'chancod':  self._convert_changecode,
                     'coord':    self._convert_coord,
                     'loglev':   self._convert_loglevel,
                     'ipv4':     self._convert_ipv4,
@@ -836,190 +1116,190 @@ _vscp_priority = [
     {'name': 'Lowest',      'id': 7}
 ]
 _class_1_protocol = [
-    {'type': 'GENERAL',                             'id': 0,    'descr': {}},   # General event.
+    {'type': 'GENERAL',                             'id': 0,    'descr': {}},   # General event
     {'type': 'SEGCTRL_HEARTBEAT',                   'id': 1,    'descr': {'str': 'Segment Controller Heartbeat',
                                                                           'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Segment GUID CRC'},
                                                                                   1: {'l': 4, 't': 'dtime0', 'd': 'Date/Time'}}
-                                                                         }},    # Segment Controller Heartbeat.
+                                                                         }},    # Segment Controller Heartbeat
     {'type': 'NEW_NODE_ONLINE',                     'id': 2,    'descr': {'str': 'New node on line / Probe',
                                                                           'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Target nickname'}}
-                                                                         }},    # New node on line / Probe.
+                                                                         }},    # New node on line / Probe
     {'type': 'PROBE_ACK',                           'id': 3,    'descr': {'str': 'Probe ACK',
                                                                           'dlc': {0: {'l': 0, 't': 'none', 'd': 'no arguments'}}
-                                                                         }},    # Probe ACK.
-    {'type': 'RESERVED4',                           'id': 4,    'descr': {}},   # Reserved for future use.
-    {'type': 'RESERVED5',                           'id': 5,    'descr': {}},   # Reserved for future use.
+                                                                         }},    # Probe ACK
+    {'type': 'RESERVED4',                           'id': 4,    'descr': {}},   # Reserved for future use
+    {'type': 'RESERVED5',                           'id': 5,    'descr': {}},   # Reserved for future use
     {'type': 'SET_NICKNAME',                        'id': 6,    'descr': {'str': 'Set nickname-ID for node',
                                                                           'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Old node ID'},
                                                                                   1: {'l': 1, 't': 'hexint', 'd': 'New node ID'}}
-                                                                         }},    # Set nickname-ID for node.
+                                                                         }},    # Set nickname-ID for node
     {'type': 'NICKNAME_ACCEPTED',                   'id': 7,    'descr': {'str': 'New node ID accepted',
                                                                           'dlc': {0: {'l': 0, 't': 'none', 'd': 'no arguments'}}
-                                                                         }},    # Nickname-ID accepted.
+                                                                         }},    # Nickname-ID accepted
     {'type': 'DROP_NICKNAME',                       'id': 8,    'descr': {'str': 'Drop node ID / Reset Device',
                                                                           'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Current node ID'},
                                                                                   1: {'l': 1, 't': 'flags0', 'd': 'Flags'},
                                                                                   2: {'l': 1, 't': 'uint', 'd': 'Action wait time'}}
-                                                                         }},    # Drop nickname-ID / Reset Device.
+                                                                         }},    # Drop nickname-ID / Reset Device
     {'type': 'READ_REGISTER',                       'id': 9,    'descr': {'str': 'Read register',
                                                                           'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Target node ID'},
                                                                                   1: {'l': 1, 't': 'hexint', 'd': 'Register to read'}}
-                                                                         }},    # Read register.
+                                                                         }},    # Read register
     {'type': 'RW_RESPONSE',                         'id': 10,   'descr': {'str': 'Read/Write response',
                                                                           'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Register address'},
                                                                                   1: {'l': 1, 't': 'hexint', 'd': 'Content of reg.'}}
-                                                                         }},    # Read/Write response.
+                                                                         }},    # Read/Write response
     {'type': 'WRITE_REGISTER',                      'id': 11,   'descr': {'str': 'Write register',
                                                                           'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Target node ID'},
                                                                                   1: {'l': 1, 't': 'hexint', 'd': 'Register to write'},
                                                                                   2: {'l': 1, 't': 'hexint', 'd': 'Content of reg.'}}
-                                                                         }},    # Write register.
+                                                                         }},    # Write register
     {'type': 'ENTER_BOOT_LOADER',                   'id': 12,   'descr': {'str': 'Enter boot loader mode',
                                                                           'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Target node ID'},
                                                                                   1: {'l': 1, 't': 'blalgo', 'd': 'Boot loader algo.'},
                                                                                   2: {'l': 4, 't': 'raw', 'd': 'GUID[0][3][5][7]'},
                                                                                   3: {'l': 2, 't': 'raw', 'd': '#reg.[0x92][0x93]'}}
-                                                                         }},    # Enter boot loader mode.
+                                                                         }},    # Enter boot loader mode
     {'type': 'ACK_BOOT_LOADER',                     'id': 13,   'descr': {'str': 'ACK boot loader mode',
                                                                           'dlc': {0: {'l': 4, 't': 'uint', 'd': 'Flash block size'},
                                                                                   1: {'l': 4, 't': 'uint', 'd': 'Number of blocks'}}
-                                                                         }},    # ACK boot loader mode.
+                                                                         }},    # ACK boot loader mode
     {'type': 'NACK_BOOT_LOADER',                    'id': 14,   'descr': {'str': 'NACK boot loader mode',
                                                                           'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Error code'}}
-                                                                         }},    # NACK boot loader mode.
+                                                                         }},    # NACK boot loader mode
     {'type': 'START_BLOCK',                         'id': 15,   'descr': {'str': 'Start block data transfer',
                                                                           'dlc': {0: {'l': 4, 't': 'uint', 'd': 'Block number'},
                                                                                   1: {'l': 1, 't': 'memtyp', 'd': 'Mem. to wr. type'},
                                                                                   2: {'l': 1, 't': 'uint', 'd': 'Memory Bank/Image'}}
-                                                                         }},    # Start block data transfer.
+                                                                         }},    # Start block data transfer
     {'type': 'BLOCK_DATA',                          'id': 16,   'descr': {'str': 'Block data',
                                                                           'dlc': {0: {'l': 8, 't': 'raw', 'd': 'Data'}}
-                                                                         }},    # Block data.
+                                                                         }},    # Block data
     {'type': 'BLOCK_DATA_ACK',                      'id': 17,   'descr': {'str': 'ACK data block',
                                                                           'dlc': {0: {'l': 2, 't': 'hexint', 'd': 'CRC for block'},
                                                                                   1: {'l': 4, 't': 'uint', 'd': 'Block number'}}
-                                                                         }},    # ACK data block.
+                                                                         }},    # ACK data block
     {'type': 'BLOCK_DATA_NACK',                     'id': 18,   'descr': {'str': 'NACK data block',
                                                                           'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Error code'},
                                                                                   1: {'l': 4, 't': 'uint', 'd': 'Block number'}}
-                                                                         }},    # NACK data block.
+                                                                         }},    # NACK data block
     {'type': 'PROGRAM_BLOCK_DATA',                  'id': 19,   'descr': {'str': 'Program data block',
                                                                           'dlc': {0: {'l': 4, 't': 'uint', 'd': 'Block number'}}
-                                                                         }},    # Program data block.
+                                                                         }},    # Program data block
     {'type': 'PROGRAM_BLOCK_DATA_ACK',              'id': 20,   'descr': {'str': 'ACK program data block',
                                                                           'dlc': {0: {'l': 4, 't': 'uint', 'd': 'Block number'}}
-                                                                         }},    # ACK program data block.
+                                                                         }},    # ACK program data block
     {'type': 'PROGRAM_BLOCK_DATA_NACK',             'id': 21,   'descr': {'str': 'NACK program data block',
                                                                           'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Error code'},
                                                                                   1: {'l': 4, 't': 'uint', 'd': 'Block number'}}
-                                                                         }},    # NACK program data block.
+                                                                         }},    # NACK program data block
     {'type': 'ACTIVATE_NEW_IMAGE',                  'id': 22,   'descr': {'str': 'Activate new image',
                                                                           'dlc': {0: {'l': 2, 't': 'hexint', 'd': 'CRC of all blocks'}}
-                                                                         }},    # Activate new image.
+                                                                         }},    # Activate new image
     {'type': 'RESET_DEVICE',                        'id': 23,   'descr': {'str': 'GUID drop node ID & reset device',
                                                                           'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
                                                                                   1: {'l': 4, 't': 'raw', 'd': 'GUID bytes 15..0'}}
-                                                                         }},    # GUID drop nickname-ID / reset device.
+                                                                         }},    # GUID drop nickname-ID / reset device
     {'type': 'PAGE_READ',                           'id': 24,   'descr': {'str': 'Page read',
                                                                           'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Target node ID'},
                                                                                   1: {'l': 1, 't': 'hexint', 'd': 'Register to read'},
                                                                                   2: {'l': 1, 't': 'uint', 'd': 'Numb. regs to rd.'}}
-                                                                         }},    # Page read.
+                                                                         }},    # Page read
     {'type': 'PAGE_WRITE',                          'id': 25,   'descr': {'str': 'Page write',
                                                                           'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Target node ID'},
                                                                                   1: {'l': 1, 't': 'hexint', 'd': 'Register to write'},
                                                                                   2: {'l': 6, 't': 'raw', 'd': 'Content of reg(s)'}}
-                                                                         }},    # Page write.
+                                                                         }},    # Page write
     {'type': 'RW_PAGE_RESPONSE',                    'id': 26,   'descr': {'str': 'Read/Write page response',
                                                                           'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Sequence number'},
                                                                                   1: {'l': 7, 't': 'raw', 'd': 'Data'}}
-                                                                         }},    # Read/Write page response.
+                                                                         }},    # Read/Write page response
     {'type': 'HIGH_END_SERVER_PROBE',               'id': 27,   'descr': {'str': 'High end server/service probe',
                                                                           'dlc': {0: {'l': 0, 't': 'none', 'd': 'no arguments'}}
-                                                                         }},    # High end server/service probe.
-    {'type': 'HIGH_END_SERVER_RESPONSE',            'id': 28,   'descr': {'str': 'Page write',
+                                                                         }},    # High end server/service probe
+    {'type': 'HIGH_END_SERVER_RESPONSE',            'id': 28,   'descr': {'str': 'High end server/service response',
                                                                           'dlc': {0: {'l': 2, 't': 'flags1', 'd': 'Capability flags'},
                                                                                   1: {'l': 4, 't': 'ipv4', 'd': 'Server IP address'},
                                                                                   2: {'l': 2, 't': 'uint', 'd': 'Server Port'}}
-                                                                         }},    # High end server/service response.
+                                                                         }},    # High end server/service response
     {'type': 'INCREMENT_REGISTER',                  'id': 29,   'descr': {'str': 'Increment register',
                                                                           'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Target node ID'},
                                                                                   1: {'l': 1, 't': 'hexint', 'd': 'Reg. to increment'}}
-                                                                         }},    # Increment register.
+                                                                         }},    # Increment register
     {'type': 'DECREMENT_REGISTER',                  'id': 30,   'descr': {'str': 'Decrement register',
                                                                           'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Target node ID'},
                                                                                   1: {'l': 1, 't': 'hexint', 'd': 'Reg. to decrement'}}
-                                                                         }},    # Decrement register.
+                                                                         }},    # Decrement register
     {'type': 'WHO_IS_THERE',                        'id': 31,   'descr': {'str': 'Who is there?',
                                                                           'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Target node ID'}}
                                                                          }},    # Who is there?
     {'type': 'WHO_IS_THERE_RESPONSE',               'id': 32,   'descr': {'str': 'Who is there response',
                                                                           'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Chunk index'},
                                                                                   1: {'l': 7, 't': 'raw', 'd': 'Chunk data'}}
-                                                                         }},    # Who is there response.
+                                                                         }},    # Who is there response
     {'type': 'GET_MATRIX_INFO',                     'id': 33,   'descr': {'str': 'Get decision matrix info',
                                                                           'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Target node ID'}}
-                                                                         }},    # Get decision matrix info.
+                                                                         }},    # Get decision matrix info
     {'type': 'GET_MATRIX_INFO_RESPONSE',            'id': 34,   'descr': {'str': 'Decision matrix info response',
                                                                           'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Matrix size'},
                                                                                   1: {'l': 1, 't': 'uint', 'd': 'Reg. space offset'},
                                                                                   2: {'l': 2, 't': 'uint', 'd': 'Page start'},
                                                                                   3: {'l': 2, 't': 'uint', 'd': 'Page end'}}
-                                                                         }},    # Decision matrix info response.
+                                                                         }},    # Decision matrix info response
     {'type': 'GET_EMBEDDED_MDF',                    'id': 35,   'descr': {'str': 'Get embedded MDF',
                                                                           'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Target node ID'}}
-                                                                         }},    # Get embedded MDF.
+                                                                         }},    # Get embedded MDF
     {'type': 'GET_EMBEDDED_MDF_RESPONSE',           'id': 36,   'descr': {'str': 'Embedded MDF response',
                                                                           'dlc': {0: {'l': 2, 't': 'uint', 'd': 'Chunk index'},
                                                                                   1: {'l': 6, 't': 'raw', 'd': 'Chunk data'}}
-                                                                         }},    # Embedded MDF response.
+                                                                         }},    # Embedded MDF response
     {'type': 'EXTENDED_PAGE_READ',                  'id': 37,   'descr': {'str': 'Extended page read register(s)',
                                                                           'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Target node ID'},
                                                                                   1: {'l': 2, 't': 'uint', 'd': 'Reg. page addr.'},
                                                                                   2: {'l': 1, 't': 'hexint', 'd': 'Register to read'},
                                                                                   3: {'l': 1, 't': 'ruint', 'd': 'Numb. regs to rd.'}}
-                                                                         }},    # Extended page read register.
+                                                                         }},    # Extended page read register
     {'type': 'EXTENDED_PAGE_WRITE',                 'id': 38,   'descr': {'str': 'Extended page write register(s)',
                                                                           'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Target node ID'},
                                                                                   1: {'l': 2, 't': 'uint', 'd': 'Reg. page addr.'},
                                                                                   2: {'l': 1, 't': 'hexint', 'd': 'Register to write'},
                                                                                   3: {'l': 4, 't': 'raw', 'd': 'Content of reg(s)'}}
-                                                                         }},    # Extended page write register.
+                                                                         }},    # Extended page write register
     {'type': 'EXTENDED_PAGE_RESPONSE',              'id': 39,   'descr': {'str': 'Extended page read/write response',
                                                                           'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
                                                                                   1: {'l': 2, 't': 'uint', 'd': 'Reg. page addr.'},
                                                                                   2: {'l': 1, 't': 'hexint', 'd': 'Reg. read/written'},
                                                                                   3: {'l': 4, 't': 'raw', 'd': 'Content of reg(s)'}}
-                                                                         }},    # Extended page read/write response.
+                                                                         }},    # Extended page read/write response
     {'type': 'GET_EVENT_INTEREST',                  'id': 40,   'descr': {'str': 'Get event interest',
                                                                           'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Target node ID'}}
-                                                                         }},   # Get event interest.
+                                                                         }},   # Get event interest
     {'type': 'GET_EVENT_INTEREST_RESPONSE',         'id': 41,   'descr': {'str': 'Get event interest response',
                                                                           'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
                                                                                   1: {'l': 2, 't': 'hexint', 'd': 'VSCP class ID'},
                                                                                   2: {'l': 2, 't': 'hexint', 'd': 'VSCP type ID'}}
-                                                                         }},    # Get event interest response.
+                                                                         }},    # Get event interest response
     {'type': 'ACTIVATE_NEW_IMAGE_ACK',              'id': 48,   'descr': {'str': 'Activate new image ACK',
                                                                           'dlc': {0: {'l': 0, 't': 'none', 'd': 'no arguments'}}
-                                                                         }},    # Activate new image ACK.
+                                                                         }},    # Activate new image ACK
     {'type': 'ACTIVATE_NEW_IMAGE_NACK',             'id': 49,   'descr': {'str': 'Activate new image NACK',
                                                                           'dlc': {0: {'l': 0, 't': 'none', 'd': 'no arguments'}}
-                                                                         }},    # Activate new image NACK.
+                                                                         }},    # Activate new image NACK
     {'type': 'START_BLOCK_ACK',                     'id': 50,   'descr': {'str': 'Start Block ACK',
                                                                           'dlc': {0: {'l': 0, 't': 'none', 'd': 'no arguments'}}
-                                                                         }},    # Block data transfer ACK.
+                                                                         }},    # Block data transfer ACK
     {'type': 'START_BLOCK_NACK',                    'id': 51,   'descr': {'str': 'Start Block NACK',
                                                                           'dlc': {0: {'l': 0, 't': 'none', 'd': 'no arguments'}}
-                                                                         }},    # Block data transfer NACK.
+                                                                         }},    # Block data transfer NACK
     {'type': 'BLOCK_CHUNK_ACK',                     'id': 52,   'descr': {'str': 'Block Data Chunk ACK',
                                                                           'dlc': {0: {'l': 0, 't': 'none', 'd': 'no arguments'}}
-                                                                         }},    # Block Data Chunk ACK.
+                                                                         }},    # Block Data Chunk ACK
     {'type': 'BLOCK_CHUNK_NACK',                    'id': 53,   'descr': {'str': 'Block Data Chunk NACK',
                                                                           'dlc': {0: {'l': 0, 't': 'none', 'd': 'no arguments'}}
-                                                                         }},    # Block Data Chunk NACK.
+                                                                         }},    # Block Data Chunk NACK
     {'type': 'BOOT_LOADER_CHECK',                   'id': 54,   'descr': {'str': 'Bootloader CHECK',
                                                                           'dlc': {0: {'l': 0, 't': 'none', 'd': 'no arguments'}}
-                                                                         }},    # Bootloader CHECK.
+                                                                         }},    # Bootloader CHECK
 ]
 _class_1_alarm = [
     {'type': 'GENERAL',                             'id': 0,    'descr': {}},   # General event
@@ -1401,7 +1681,7 @@ _class_1_measurement = [
                                                                          }},    # Radiation dose (absorbed)
     {'type': 'CATALYTIC_ACITIVITY',                 'id': 27,   'descr': {'str': 'Catalytic activity',
                                                                           'dlc': {0: {'l': 8, 't': 'measdata', 'd': 'Value'}},
-                                                                          'uni': {0: 'kat'}         # katal - this is a measurement of catalytic activity used in biochemistry.
+                                                                          'uni': {0: 'kat'}         # katal - this is a measurement of catalytic activity used in biochemistry
                                                                          }},    # Catalytic activity
     {'type': 'VOLUME',                              'id': 28,   'descr': {'str': 'Volume',
                                                                           'dlc': {0: {'l': 8, 't': 'measdata', 'd': 'Value'}},
@@ -1591,13 +1871,36 @@ _class_1_measurement_x4 = [
     {'type': 'GENERAL',                             'id': 0,    'descr': {}},  # General event
 ]
 _class_1_data = [
-    {'type': 'GENERAL',                             'id': 0,    'descr': {}},  # General event
-    {'type': 'IO',                                  'id': 1,    'descr': {}},  # I/O value
-    {'type': 'AD',                                  'id': 2,    'descr': {}},  # A/D value
-    {'type': 'DA',                                  'id': 3,    'descr': {}},  # D/A value
-    {'type': 'RELATIVE_STRENGTH',                   'id': 4,    'descr': {}},  # Relative strength
-    {'type': 'SIGNAL_LEVEL',                        'id': 5,    'descr': {}},  # Signal Level
-    {'type': 'SIGNAL_QUALITY',                      'id': 6,    'descr': {}},  # Signal Quality
+    {'type': 'GENERAL',                             'id': 0,    'descr': {}},   # General event
+    {'type': 'IO',                                  'id': 1,    'descr': {'str': 'I/O value',
+                                                                          'dlc': {0: {'l': 8, 't': 'measdata', 'd': 'Value'}},
+                                                                          'uni': {}                 # no unit
+                                                                         }},    # I/O value
+    {'type': 'AD',                                  'id': 2,    'descr': {'str': 'A/D value',
+                                                                          'dlc': {0: {'l': 8, 't': 'measdata', 'd': 'Value'}},
+                                                                          'uni': {}                 # no unit
+                                                                         }},    # A/D value
+    {'type': 'DA',                                  'id': 3,    'descr': {'str': 'D/A value',
+                                                                          'dlc': {0: {'l': 8, 't': 'measdata', 'd': 'Value'}},
+                                                                          'uni': {}                 # no unit
+                                                                         }},    # D/A value
+    {'type': 'RELATIVE_STRENGTH',                   'id': 4,    'descr': {'str': 'Relative strength',
+                                                                          'dlc': {0: {'l': 8, 't': 'measdata', 'd': 'Value'}},
+                                                                          'uni': {0: '',            # no unit
+                                                                                  1: 'dB',          # decibel
+                                                                                  2: 'dBV'}         # decibel volts
+                                                                         }},    # Relative strength
+    {'type': 'SIGNAL_LEVEL',                        'id': 5,    'descr': {'str': 'Signal Level',
+                                                                          'dlc': {0: {'l': 8, 't': 'measdata', 'd': 'Value'}},
+                                                                          'uni': {0: '%',           # 0-100 percentage
+                                                                                  1: ''}            # no unit
+                                                                         }},    # Signal Level
+    {'type': 'SIGNAL_QUALITY',                      'id': 6,    'descr': {'str': 'Signal Quality',
+                                                                          'dlc': {0: {'l': 8, 't': 'measdata', 'd': 'Value'}},
+                                                                          'uni': {0: '%',           # 0-100 percentage
+                                                                                  1: '',            # no unit
+                                                                                  2: 'dBm'}         # decibel milliwatts
+                                                                         }},    # Signal Quality
 ]
 _class_1_information = [
     {'type': 'GENERAL',                             'id': 0,    'descr': {}},   # General event
@@ -2166,7 +2469,7 @@ _class_1_control = [
                                                                                   2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
                                                                          }},    # Dim lamp(s)
     {'type': 'CHANGE_CHANNEL',                      'id': 21,   'descr': {'str': 'Change Channel',
-                                                                          'dlc': {0: {'l': 1, 't': 'channt', 'd': 'Channel number'},
+                                                                          'dlc': {0: {'l': 1, 't': 'chancod', 'd': 'Channel number'},
                                                                                   1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
                                                                                   2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
                                                                                   3: {'l': 5, 't': 'uint', 'd': 'Extended'}}
@@ -2350,46 +2653,187 @@ _class_1_control = [
                                                                          }},    # Decrement
 ]
 _class_1_multimedia = [
-    {'type': 'GENERAL',                             'id': 0,    'descr': {}},  # General event
-    {'type': 'PLAYBACK',                            'id': 1,    'descr': {}},  # Playback
-    {'type': 'NAVIGATOR_KEY_ENG',                   'id': 2,    'descr': {}},  # NavigatorKey English
-    {'type': 'ADJUST_CONTRAST',                     'id': 3,    'descr': {}},  # Adjust Contrast
-    {'type': 'ADJUST_FOCUS',                        'id': 4,    'descr': {}},  # Adjust Focus
-    {'type': 'ADJUST_TINT',                         'id': 5,    'descr': {}},  # Adjust Tint
-    {'type': 'ADJUST_COLOUR_BALANCE',               'id': 6,    'descr': {}},  # Adjust Color Balance
-    {'type': 'ADJUST_BRIGHTNESS',                   'id': 7,    'descr': {}},  # Adjust Brightness
-    {'type': 'ADJUST_HUE',                          'id': 8,    'descr': {}},  # Adjust Hue
-    {'type': 'ADJUST_BASS',                         'id': 9,    'descr': {}},  # Adjust Bass
-    {'type': 'ADJUST_TREBLE',                       'id': 10,   'descr': {}},  # Adjust Treble
-    {'type': 'ADJUST_MASTER_VOLUME',                'id': 11,   'descr': {}},  # Adjust Master Volume
-    {'type': 'ADJUST_FRONT_VOLUME',                 'id': 12,   'descr': {}},  # Adjust Front Volume
-    {'type': 'ADJUST_CENTRE_VOLUME',                'id': 13,   'descr': {}},  # Adjust Center Volume
-    {'type': 'ADJUST_REAR_VOLUME',                  'id': 14,   'descr': {}},  # Adjust Rear Volume
-    {'type': 'ADJUST_SIDE_VOLUME',                  'id': 15,   'descr': {}},  # Adjust Side Volume
-    {'type': 'RESERVED16',                          'id': 16,   'descr': {}},  # Reserved
-    {'type': 'RESERVED17',                          'id': 17,   'descr': {}},  # Reserved
-    {'type': 'RESERVED18',                          'id': 18,   'descr': {}},  # Reserved
-    {'type': 'RESERVED19',                          'id': 19,   'descr': {}},  # Reserved
-    {'type': 'ADJUST_SELECT_DISK',                  'id': 20,   'descr': {}},  # Select Disk
-    {'type': 'ADJUST_SELECT_TRACK',                 'id': 21,   'descr': {}},  # Select Track
-    {'type': 'ADJUST_SELECT_ALBUM',                 'id': 22,   'descr': {}},  # Select Album/Play list
-    {'type': 'ADJUST_SELECT_CHANNEL',               'id': 23,   'descr': {}},  # Select Channel
-    {'type': 'ADJUST_SELECT_PAGE',                  'id': 24,   'descr': {}},  # Select Page
-    {'type': 'ADJUST_SELECT_CHAPTER',               'id': 25,   'descr': {}},  # Select Chapter
-    {'type': 'ADJUST_SELECT_SCREEN_FORMAT',         'id': 26,   'descr': {}},  # Select Screen Format
-    {'type': 'ADJUST_SELECT_INPUT_SOURCE',          'id': 27,   'descr': {}},  # Select Input Source
-    {'type': 'ADJUST_SELECT_OUTPUT',                'id': 28,   'descr': {}},  # Select Output
-    {'type': 'RECORD',                              'id': 29,   'descr': {}},  # Record
-    {'type': 'SET_RECORDING_VOLUME',                'id': 30,   'descr': {}},  # Set Recording Volume
-    {'type': 'TIVO_FUNCTION',                       'id': 40,   'descr': {}},  # Tivo Function
-    {'type': 'GET_CURRENT_TITLE',                   'id': 50,   'descr': {}},  # Get Current Title
-    {'type': 'SET_POSITION',                        'id': 51,   'descr': {}},  # Set media position in milliseconds
-    {'type': 'GET_MEDIA_INFO',                      'id': 52,   'descr': {}},  # Get media information
-    {'type': 'REMOVE_ITEM',                         'id': 53,   'descr': {}},  # Remove Item from Album
-    {'type': 'REMOVE_ALL_ITEMS',                    'id': 54,   'descr': {}},  # Remove all Items from Album
-    {'type': 'SAVE_ALBUM',                          'id': 55,   'descr': {}},  # Save Album/Play list
-    {'type': 'CONTROL',                             'id': 60,   'descr': {}},  # Multimedia Control
-    {'type': 'CONTROL_RESPONSE',                    'id': 61,   'descr': {}},  # Multimedia Control response
+    {'type': 'GENERAL',                             'id': 0,    'descr': {}},   # General event
+    {'type': 'PLAYBACK',                            'id': 1,    'descr': {'str': 'Playback',
+                                                                          'dlc': {0: {'l': 1, 't': 'pbfunc', 'd': 'Function'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Playback
+    {'type': 'NAVIGATOR_KEY_ENG',                   'id': 2,    'descr': {'str': 'NavigatorKey English',
+                                                                          'dlc': {0: {'l': 1, 't': 'navkey', 'd': 'Function'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # NavigatorKey English
+    {'type': 'ADJUST_CONTRAST',                     'id': 3,    'descr': {'str': 'Adjust Contrast',
+                                                                          'dlc': {0: {'l': 1, 't': 'chancod', 'd': 'Value'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Adjust Contrast
+    {'type': 'ADJUST_FOCUS',                        'id': 4,    'descr': {'str': 'Adjust Focus',
+                                                                          'dlc': {0: {'l': 1, 't': 'chancod', 'd': 'Value'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Adjust Focus
+    {'type': 'ADJUST_TINT',                         'id': 5,    'descr': {'str': 'Adjust Tint',
+                                                                          'dlc': {0: {'l': 1, 't': 'chancod', 'd': 'Value'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Adjust Tint
+    {'type': 'ADJUST_COLOUR_BALANCE',               'id': 6,    'descr': {'str': 'Adjust Color Balance',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Reserved'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Adjust Color Balance
+    {'type': 'ADJUST_BRIGHTNESS',                   'id': 7,    'descr': {'str': 'Adjust Brightness',
+                                                                          'dlc': {0: {'l': 1, 't': 'chancod', 'd': 'Value'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Adjust Brightness
+    {'type': 'ADJUST_HUE',                          'id': 8,    'descr': {'str': 'Adjust Hue',
+                                                                          'dlc': {0: {'l': 1, 't': 'chancod', 'd': 'Value'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Adjust Hue
+    {'type': 'ADJUST_BASS',                         'id': 9,    'descr': {'str': 'Adjust Bass',
+                                                                          'dlc': {0: {'l': 1, 't': 'chancod', 'd': 'Value'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Adjust Bass
+    {'type': 'ADJUST_TREBLE',                       'id': 10,   'descr': {'str': 'Adjust Treble',
+                                                                          'dlc': {0: {'l': 1, 't': 'chancod', 'd': 'Value'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Adjust Treble
+    {'type': 'ADJUST_MASTER_VOLUME',                'id': 11,   'descr': {'str': 'Adjust Master Volume',
+                                                                          'dlc': {0: {'l': 1, 't': 'chancod', 'd': 'Value'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Adjust Master Volume
+    {'type': 'ADJUST_FRONT_VOLUME',                 'id': 12,   'descr': {'str': 'Adjust Front Volume',
+                                                                          'dlc': {0: {'l': 1, 't': 'chancod', 'd': 'Value'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Adjust Front Volume
+    {'type': 'ADJUST_CENTRE_VOLUME',                'id': 13,   'descr': {'str': 'Adjust Center Volume',
+                                                                          'dlc': {0: {'l': 1, 't': 'chancod', 'd': 'Value'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Adjust Center Volume
+    {'type': 'ADJUST_REAR_VOLUME',                  'id': 14,   'descr': {'str': 'Adjust Rear Volume',
+                                                                          'dlc': {0: {'l': 1, 't': 'chancod', 'd': 'Value'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Adjust Rear Volume
+    {'type': 'ADJUST_SIDE_VOLUME',                  'id': 15,   'descr': {'str': 'Adjust Side Volume',
+                                                                          'dlc': {0: {'l': 1, 't': 'chancod', 'd': 'Value'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Adjust Side Volume
+    {'type': 'RESERVED16',                          'id': 16,   'descr': {}},   # Reserved
+    {'type': 'RESERVED17',                          'id': 17,   'descr': {}},   # Reserved
+    {'type': 'RESERVED18',                          'id': 18,   'descr': {}},   # Reserved
+    {'type': 'RESERVED19',                          'id': 19,   'descr': {}},   # Reserved
+    {'type': 'ADJUST_SELECT_DISK',                  'id': 20,   'descr': {'str': 'Select Disk',
+                                                                          'dlc': {0: {'l': 1, 't': 'chancod', 'd': 'Value'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Select Disk
+    {'type': 'ADJUST_SELECT_TRACK',                 'id': 21,   'descr': {'str': 'Select Track',
+                                                                          'dlc': {0: {'l': 1, 't': 'chancod', 'd': 'Value'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Select Track
+    {'type': 'ADJUST_SELECT_ALBUM',                 'id': 22,   'descr': {'str': 'Select Album/Play list',
+                                                                          'dlc': {0: {'l': 1, 't': 'chancod', 'd': 'Value'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Select Album/Play list
+    {'type': 'ADJUST_SELECT_CHANNEL',               'id': 23,   'descr': {'str': 'Select Channel',
+                                                                          'dlc': {0: {'l': 1, 't': 'chancod', 'd': 'Value'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Select Channel
+    {'type': 'ADJUST_SELECT_PAGE',                  'id': 24,   'descr': {'str': 'Select Page',
+                                                                          'dlc': {0: {'l': 1, 't': 'chancod', 'd': 'Value'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Select Page
+    {'type': 'ADJUST_SELECT_CHAPTER',               'id': 25,   'descr': {'str': 'Select Chapter',
+                                                                          'dlc': {0: {'l': 1, 't': 'chancod', 'd': 'Value'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Select Chapter
+    {'type': 'ADJUST_SELECT_SCREEN_FORMAT',         'id': 26,   'descr': {'str': 'Select Screen Format',
+                                                                          'dlc': {0: {'l': 1, 't': 'scrform', 'd': 'Format'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Select Screen Format
+    {'type': 'ADJUST_SELECT_INPUT_SOURCE',          'id': 27,   'descr': {'str': 'Select Input Source',
+                                                                          'dlc': {0: {'l': 1, 't': 'devcodi', 'd': 'Source'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Select Input Source
+    {'type': 'ADJUST_SELECT_OUTPUT',                'id': 28,   'descr': {'str': 'Select Input Source',
+                                                                          'dlc': {0: {'l': 1, 't': 'devcodo', 'd': 'Output'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Select Output
+    {'type': 'RECORD',                              'id': 29,   'descr': {'str': 'Select Input Source',
+                                                                          'dlc': {0: {'l': 1, 't': 'recfunc', 'd': 'Output'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Record
+    {'type': 'SET_RECORDING_VOLUME',                'id': 30,   'descr': {'str': 'Set Recording Volume',
+                                                                          'dlc': {0: {'l': 1, 't': 'chancod', 'd': 'Value'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Set Recording Volume
+    {'type': 'TIVO_FUNCTION',                       'id': 40,   'descr': {'str': 'Tivo Function',
+                                                                          'dlc': {0: {'l': 1, 't': 'tivocod', 'd': 'TIVO Code'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Tivo Function
+    {'type': 'GET_CURRENT_TITLE',                   'id': 50,   'descr': {'str': 'Get Current Title',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Reserved'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Get Current Title
+    {'type': 'SET_POSITION',                        'id': 51,   'descr': {'str': 'Set media position in milliseconds',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Reserved'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'uint', 'd': 'Position [ms]'}}
+                                                                         }},    # Set media position in milliseconds
+    {'type': 'GET_MEDIA_INFO',                      'id': 52,   'descr': {'str': 'Get media information',
+                                                                          'dlc': {0: {'l': 1, 't': 'medinfo', 'd': 'Info req.'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Get media information
+    {'type': 'REMOVE_ITEM',                         'id': 53,   'descr': {'str': 'Remove Item from Album',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Item/Track ID'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Remove Item from Album
+    {'type': 'REMOVE_ALL_ITEMS',                    'id': 54,   'descr': {'str': 'Remove all Items from Album',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Reserved'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Remove all Items from Album
+    {'type': 'SAVE_ALBUM',                          'id': 55,   'descr': {'str': 'Save Album/Play list',
+                                                                          'dlc': {0: {'l': 1, 't': 'onoffst', 'd': 'Overwr. existing'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Save Album/Play list
+    {'type': 'CONTROL',                             'id': 60,   'descr': {'str': 'Save Album/Play list',
+                                                                          'dlc': {0: {'l': 1, 't': 'mmedcont', 'd': 'Control code'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  4: {'l': 4, 't': 'utf8', 'd': 'Data'}}
+                                                                         }},    # Multimedia Control
+    {'type': 'CONTROL_RESPONSE',                    'id': 61,   'descr': {'str': 'Multimedia Control response',
+                                                                          'dlc': {0: {'l': 0, 't': 'none', 'd': 'no arguments'}}
+                                                                         }},    # Multimedia Control response
 ]
 _class_1_aol = [
     {'type': 'GENERAL',                             'id': 0,    'descr': {}},   # General event
@@ -2620,7 +3064,7 @@ _class_1_weather = [
                                                                           'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
                                                                                   1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
                                                                                   2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
-                                                                         }},  # Rain light
+                                                                         }},    # Rain light
     {'type': 'RAIN_HEAVY',                          'id': 26,   'descr': {'str': 'Rain heavy',
                                                                           'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
                                                                                   1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
@@ -2760,57 +3204,218 @@ _class_1_weather = [
 ]
 _class_1_weather_forecast = _class_1_weather
 _class_1_phone = [
-    {'type': 'GENERAL',                             'id': 0,    'descr': {}},  # General event
-    {'type': 'INCOMING_CALL',                       'id': 1,    'descr': {}},  # Incoming call
-    {'type': 'OUTGOING_CALL',                       'id': 2,    'descr': {}},  # Outgoing call
-    {'type': 'RING',                                'id': 3,    'descr': {}},  # Ring
-    {'type': 'ANSWER',                              'id': 4,    'descr': {}},  # Answer
-    {'type': 'HANGUP',                              'id': 5,    'descr': {}},  # Hangup
-    {'type': 'GIVEUP',                              'id': 6,    'descr': {}},  # Giveup
-    {'type': 'TRANSFER',                            'id': 7,    'descr': {}},  # Transfer
-    {'type': 'DATABASE_INFO',                       'id': 8,    'descr': {}},  # Database Info
+    {'type': 'GENERAL',                             'id': 0,    'descr': {}},   # General event
+    {'type': 'INCOMING_CALL',                       'id': 1,    'descr': {'str': 'Incoming call',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Call ID'},
+                                                                                  1: {'l': 1, 't': 'uint', 'd': 'Chunk index'},
+                                                                                  2: {'l': 1, 't': 'uint', 'd': 'Total chunks'},
+                                                                                  3: {'l': 1, 't': 'utf8', 'd': 'Call information'}}
+                                                                         }},    # Incoming call
+    {'type': 'OUTGOING_CALL',                       'id': 2,    'descr': {'str': 'Outgoing call',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Call ID'},
+                                                                                  1: {'l': 1, 't': 'uint', 'd': 'Chunk index'},
+                                                                                  2: {'l': 1, 't': 'uint', 'd': 'Total chunks'},
+                                                                                  3: {'l': 1, 't': 'utf8', 'd': 'Call information'}}
+                                                                         }},    # Outgoing call
+    {'type': 'RING',                                'id': 3,    'descr': {'str': 'Ring',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Call ID'}}
+                                                                         }},    # Ring
+    {'type': 'ANSWER',                              'id': 4,    'descr': {'str': 'Answer',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Call ID'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Answer
+    {'type': 'HANGUP',                              'id': 5,    'descr': {'str': 'Hangup',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Call ID'}}
+                                                                         }},    # Hangup
+    {'type': 'GIVEUP',                              'id': 6,    'descr': {'str': 'Giveup',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Call ID'}}
+                                                                         }},    # Giveup
+    {'type': 'TRANSFER',                            'id': 7,    'descr': {'str': 'Transfer',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Call ID'}}
+                                                                         }},    # Transfer
+    {'type': 'DATABASE_INFO',                       'id': 8,    'descr': {'str': 'Database Info',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Call ID'},
+                                                                                  1: {'l': 1, 't': 'uint', 'd': 'Chunk index'},
+                                                                                  2: {'l': 1, 't': 'uint', 'd': 'Total chunks'},
+                                                                                  3: {'l': 1, 't': 'utf8', 'd': 'Call information'}}
+                                                                         }},    # Database Info
 ]
 _class_1_display = [
-    {'type': 'GENERAL',                             'id': 0,    'descr': {}},  # General event
-    {'type': 'CLEAR_DISPLAY',                       'id': 1,    'descr': {}},  # Clear Display
-    {'type': 'POSITION_CURSOR',                     'id': 2,    'descr': {}},  # Position cursor
-    {'type': 'WRITE_DISPLAY',                       'id': 3,    'descr': {}},  # Write Display
-    {'type': 'WRITE_DISPLAY_BUFFER',                'id': 4,    'descr': {}},  # Write Display buffer
-    {'type': 'SHOW_DISPLAY_BUFFER',                 'id': 5,    'descr': {}},  # Show Display Buffer
-    {'type': 'SET_DISPLAY_BUFFER_PARAM',            'id': 6,    'descr': {}},  # Set Display Buffer Parameter
-    {'type': 'SHOW_TEXT',                           'id': 32,   'descr': {}},  # Show Text
-    {'type': 'SET_LED',                             'id': 48,   'descr': {}},  # Set LED
-    {'type': 'SET_COLOR',                           'id': 49,   'descr': {}},  # Set RGB Color
+    {'type': 'GENERAL',                             'id': 0,    'descr': {}},   # General event
+    {'type': 'CLEAR_DISPLAY',                       'id': 1,    'descr': {'str': 'Clear Display',
+                                                                          'dlc': {0: {'l': 1, 't': 'hexint', 'd': 'Code'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Clear Display
+    {'type': 'POSITION_CURSOR',                     'id': 2,    'descr': {'str': 'Position cursor',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 1, 't': 'uint', 'd': 'Row'},
+                                                                                  4: {'l': 1, 't': 'uint', 'd': 'Column'}}
+                                                                         }},    # Position cursor
+    {'type': 'WRITE_DISPLAY',                       'id': 3,    'descr': {'str': 'Write Display',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'raw', 'd': 'Data'}}
+                                                                         }},    # Write Display
+    {'type': 'WRITE_DISPLAY_BUFFER',                'id': 4,    'descr': {'str': 'Write Display buffer',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'raw', 'd': 'Data'}}
+                                                                         }},    # Write Display buffer
+    {'type': 'SHOW_DISPLAY_BUFFER',                 'id': 5,    'descr': {'str': 'Show Display Buffer',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'}}
+                                                                         }},    # Show Display Buffer
+    {'type': 'SET_DISPLAY_BUFFER_PARAM',            'id': 6,    'descr': {'str': 'Set Display Buffer Parameter',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Param. index'},
+                                                                                  1: {'l': 7, 't': 'measdata', 'd': 'Value'}},
+                                                                          'uni': {}                 # no unit
+                                                                         }},    # Set Display Buffer Parameter
+    {'type': 'SHOW_TEXT',                           'id': 32,   'descr': {'str': 'Show Text',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 5, 't': 'raw', 'd': 'Data'}}
+                                                                         }},    # Show Text
+    {'type': 'SET_LED',                             'id': 48,   'descr': {'str': 'Set LED',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 1, 't': 'ledact', 'd': 'Action'},
+                                                                                  4: {'l': 2, 't': 'uint', 'd': 'Time-On [ms]'},
+                                                                                  5: {'l': 2, 't': 'uint', 'd': 'Time-Off [ms]'}}
+                                                                         }},    # Set LED
+    {'type': 'SET_COLOR',                           'id': 49,   'descr': {'str': 'Set RGB Color',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 1, 't': 'uint', 'd': 'Red'},
+                                                                                  4: {'l': 1, 't': 'uint', 'd': 'Green'},
+                                                                                  5: {'l': 1, 't': 'uint', 'd': 'Blue'}}
+                                                                         }},    # Set RGB Color
 ]
 _class_1_remote = [
-    {'type': 'GENERAL',                             'id': 0,    'descr': {}},  # General event
-    {'type': 'RC5',                                 'id': 1,    'descr': {}},  # RC5 Send/Receive
-    {'type': 'SONY12',                              'id': 3,    'descr': {}},  # SONY 12-bit Send/Receive
-    {'type': 'LIRC',                                'id': 32,   'descr': {}},  # LIRC (Linux Infrared Remote Control)
-    {'type': 'VSCP',                                'id': 48,   'descr': {}},  # VSCP Abstract Remote Format
-    {'type': 'MAPITO',                              'id': 49,   'descr': {}},  # MAPito Remote Format
+    {'type': 'GENERAL',                             'id': 0,    'descr': {}},   # General event
+    {'type': 'RC5',                                 'id': 1,    'descr': {'str': 'RC5 Send/Receive',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'RC5 code'},
+                                                                                  1: {'l': 1, 't': 'uint', 'd': 'RC5 address'},
+                                                                                  2: {'l': 1, 't': 'uint', 'd': 'Repeat count'}}
+                                                                         }},    # RC5 Send/Receive
+    {'type': 'SONY12',                              'id': 3,    'descr': {'str': 'SONY 12-bit Send/Receive',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'SONY code'},
+                                                                                  1: {'l': 1, 't': 'uint', 'd': 'SONY address'},
+                                                                                  2: {'l': 1, 't': 'uint', 'd': 'Repeat count'}}
+                                                                         }},    # SONY 12-bit Send/Receive
+    {'type': 'LIRC',                                'id': 32,   'descr': {'str': 'LIRC (Linux Infrared Remote Control) Code',
+                                                                          'dlc': {0: {'l': 7, 't': 'hexint', 'd': 'Code'},
+                                                                                  1: {'l': 1, 't': 'uint', 'd': 'Repeat count'}}
+                                                                         }},    # LIRC (Linux Infrared Remote Control)
+    {'type': 'VSCP',                                'id': 48,   'descr': {'str': 'VSCP Abstract Remote Format',
+                                                                          'dlc': {0: {'l': 2, 't': 'hexint', 'd': 'Code'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 1, 't': 'uint', 'd': 'Repeat count'}}
+                                                                         }},    # VSCP Abstract Remote Format
+    {'type': 'MAPITO',                              'id': 49,   'descr': {'str': 'MAPito Remote Format',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Repeat count'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 4, 't': 'hexint', 'd': 'Control address'},
+                                                                                  4: {'l': 1, 't': 'hexint', 'd': 'Key code'}}
+                                                                         }},    # MAPito Remote Format
 ]
 _class_1_configuration = [
-    {'type': 'GENERAL',                             'id': 0,    'descr': {}},  # General event
-    {'type': 'LOAD',                                'id': 1,    'descr': {}},  # Load configuration
-    {'type': 'LOAD_ACK',                            'id': 2,    'descr': {}},  # Load configuration acknowledge
-    {'type': 'LOAD_NACK',                           'id': 3,    'descr': {}},  # Load configuration negative acknowledge
-    {'type': 'SAVE',                                'id': 4,    'descr': {}},  # Save configuration
-    {'type': 'SAVE_ACK',                            'id': 5,    'descr': {}},  # Save configuration acknowledge
-    {'type': 'SAVE_NACK',                           'id': 6,    'descr': {}},  # Save configuration negative acknowledge
-    {'type': 'COMMIT',                              'id': 7,    'descr': {}},  # Commit configuration
-    {'type': 'COMMIT_ACK',                          'id': 8,    'descr': {}},  # Commit configuration acknowledge
-    {'type': 'COMMIT_NACK',                         'id': 9,    'descr': {}},  # Commit configuration negative acknowledge
-    {'type': 'RELOAD',                              'id': 10,   'descr': {}},  # Reload configuration
-    {'type': 'REALOD_ACK',                          'id': 11,   'descr': {}},  # Reload configuration acknowledge
-    {'type': 'RELOAD_NACK',                         'id': 12,   'descr': {}},  # Reload configuration negative acknowledge
-    {'type': 'RESTORE',                             'id': 13,   'descr': {}},  # Restore configuration
-    {'type': 'RESTORE_ACK',                         'id': 14,   'descr': {}},  # Restore configuration acknowledge
-    {'type': 'RESTORE_NACK',                        'id': 15,   'descr': {}},  # Restore configuration negative acknowledge
-    {'type': 'SET_PARAMETER',                       'id': 30,   'descr': {}},  # Set parameter
-    {'type': 'SET_PARAMETER_DEFAULT',               'id': 31,   'descr': {}},  # Set parameter to default
-    {'type': 'SET_PARAMETER_ACK',                   'id': 32,   'descr': {}},  # Set parameter acknowledge
-    {'type': 'SET_PARAMETER_NACK',                  'id': 33,   'descr': {}},  # Set paramter negative acknowledge
+    {'type': 'GENERAL',                             'id': 0,    'descr': {}},   # General event
+    {'type': 'LOAD',                                'id': 1,    'descr': {'str': 'Load configuration',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 2, 't': 'uint', 'd': 'Configuration ID'},
+                                                                                  4: {'l': 1, 't': 'confstat', 'd': 'Control byte'}}
+                                                                         }},    # Load configuration
+    {'type': 'LOAD_ACK',                            'id': 2,    'descr': {'str': 'Load configuration acknowledge',
+                                                                          'dlc': {0: {'l': 2, 't': 'uint', 'd': 'Configuration ID'}}
+                                                                         }},    # Load configuration acknowledge
+    {'type': 'LOAD_NACK',                           'id': 3,    'descr': {'str': 'Load configuration negative acknowledge',
+                                                                          'dlc': {0: {'l': 2, 't': 'uint', 'd': 'Configuration ID'}}
+                                                                         }},    # Load configuration negative acknowledge
+    {'type': 'SAVE',                                'id': 4,    'descr': {'str': 'Save configuration',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 2, 't': 'uint', 'd': 'Configuration ID'},
+                                                                                  4: {'l': 1, 't': 'confstat', 'd': 'Control byte'}}
+                                                                         }},    # Save configuration
+    {'type': 'SAVE_ACK',                            'id': 5,    'descr': {'str': 'Save configuration acknowledge',
+                                                                          'dlc': {0: {'l': 2, 't': 'uint', 'd': 'Configuration ID'}}
+                                                                         }},    # Save configuration acknowledge
+    {'type': 'SAVE_NACK',                           'id': 6,    'descr': {'str': 'Save configuration negative acknowledge',
+                                                                          'dlc': {0: {'l': 2, 't': 'uint', 'd': 'Configuration ID'}}
+                                                                         }},    # Save configuration negative acknowledge
+    {'type': 'COMMIT',                              'id': 7,    'descr': {'str': 'Commit configuration',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 2, 't': 'uint', 'd': 'Configuration ID'},
+                                                                                  4: {'l': 1, 't': 'confstat', 'd': 'Control byte'}}
+                                                                         }},    # Commit configuration
+    {'type': 'COMMIT_ACK',                          'id': 8,    'descr': {'str': 'Commit configuration acknowledge',
+                                                                          'dlc': {0: {'l': 2, 't': 'uint', 'd': 'Configuration ID'}}
+                                                                         }},    # Commit configuration acknowledge
+    {'type': 'COMMIT_NACK',                         'id': 9,    'descr': {'str': 'Commit configuration negative acknowledge',
+                                                                          'dlc': {0: {'l': 2, 't': 'uint', 'd': 'Configuration ID'}}
+                                                                         }},    # Commit configuration negative acknowledge
+    {'type': 'RELOAD',                              'id': 10,   'descr': {'str': 'Reload configuration',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 2, 't': 'uint', 'd': 'Configuration ID'},
+                                                                                  4: {'l': 1, 't': 'confstat', 'd': 'Control byte'}}
+                                                                         }},    # Reload configuration
+    {'type': 'REALOD_ACK',                          'id': 11,   'descr': {'str': 'Reload configuration acknowledge',
+                                                                          'dlc': {0: {'l': 2, 't': 'uint', 'd': 'Configuration ID'}}
+                                                                         }},    # Reload configuration acknowledge
+    {'type': 'RELOAD_NACK',                         'id': 12,   'descr': {'str': 'Reload configuration negative acknowledge',
+                                                                          'dlc': {0: {'l': 2, 't': 'uint', 'd': 'Configuration ID'}}
+                                                                         }},    # Reload configuration negative acknowledge
+    {'type': 'RESTORE',                             'id': 13,   'descr': {'str': 'Restore configuration',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 2, 't': 'uint', 'd': 'Configuration ID'},
+                                                                                  4: {'l': 1, 't': 'confstat', 'd': 'Control byte'}}
+                                                                         }},    # Restore configuration
+    {'type': 'RESTORE_ACK',                         'id': 14,   'descr': {'str': 'Restore configuration acknowledge',
+                                                                          'dlc': {0: {'l': 2, 't': 'uint', 'd': 'Configuration ID'}}
+                                                                         }},    # Restore configuration acknowledge
+    {'type': 'RESTORE_NACK',                        'id': 15,   'descr': {'str': 'Restore configuration negative acknowledge',
+                                                                          'dlc': {0: {'l': 2, 't': 'uint', 'd': 'Configuration ID'}}
+                                                                         }},    # Restore configuration negative acknowledge
+    {'type': 'SET_PARAMETER',                       'id': 30,   'descr': {'str': 'Set parameter',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 2, 't': 'uint', 'd': 'Parameter ID'},
+                                                                                  4: {'l': 2, 't': 'combints', 'd': 'Value'}}
+                                                                         }},    # Set parameter
+    {'type': 'SET_PARAMETER_DEFAULT',               'id': 31,   'descr': {'str': 'Set parameter to default',
+                                                                          'dlc': {0: {'l': 1, 't': 'uint', 'd': 'Index'},
+                                                                                  1: {'l': 1, 't': 'hexint', 'd': 'Zone'},
+                                                                                  2: {'l': 1, 't': 'hexint', 'd': 'SubZone'},
+                                                                                  3: {'l': 2, 't': 'uint', 'd': 'Parameter ID'}}
+                                                                         }},    # Set parameter to default
+    {'type': 'SET_PARAMETER_ACK',                   'id': 32,   'descr': {'str': 'Set parameter acknowledge',
+                                                                          'dlc': {0: {'l': 2, 't': 'uint', 'd': 'Configuration ID'}}
+                                                                         }},    # Set parameter acknowledge
+    {'type': 'SET_PARAMETER_NACK',                  'id': 33,   'descr': {'str': 'Set paramter negative acknowledge',
+                                                                          'dlc': {0: {'l': 2, 't': 'uint', 'd': 'Configuration ID'}}
+                                                                         }},    # Set paramter negative acknowledge
 ]
 _class_1_gnss = [
     {'type': 'GENERAL',                             'id': 0,    'descr': {}},   # General event
