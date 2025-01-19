@@ -1300,6 +1300,15 @@ _class_1_protocol = [
     {'type': 'BOOT_LOADER_CHECK',                   'id': 54,   'descr': {'str': 'Bootloader CHECK',
                                                                           'dlc': {0: {'l': 0, 't': 'none', 'd': 'no arguments'}}
                                                                          }},    # Bootloader CHECK
+    {'type': 'BOOT_LOADER_ABORT',                   'id': 55,   'descr': {'str': 'Bootloader abort',
+                                                                          'dlc': {0: {'l': 0, 't': 'none', 'd': 'no arguments'}}
+                                                                         }},    # Bootloader abort
+    {'type': 'BOOT_LOADER_ABORT_ACK',               'id': 56,   'descr': {'str': 'Bootloader abort ACK',
+                                                                          'dlc': {0: {'l': 0, 't': 'none', 'd': 'no arguments'}}
+                                                                         }},    # Bootloader abort ACK
+    {'type': 'BOOT_LOADER_ABORT_NACK',              'id': 57,   'descr': {'str': 'Bootloader abort NACK',
+                                                                          'dlc': {0: {'l': 0, 't': 'none', 'd': 'no arguments'}}
+                                                                         }},    # Bootloader abort NACK
 ]
 _class_1_alarm = [
     {'type': 'GENERAL',                             'id': 0,    'descr': {}},   # General event
