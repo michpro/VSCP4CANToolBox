@@ -18,6 +18,7 @@ PROBE_RETRIES_SHORT = int(PROBE_GAP_SHORT / PROBE_SLEEP)
 PROBE_RETRIES_LONG = int(PROBE_GAP_LONG / PROBE_SLEEP)
 FIRMWARE_WRITE_ACK_CHECK_RETRIES = int(BLOCK_WRITE_GAP / PROBE_SLEEP)
 FIRMWARE_BLOCK_WRITE_RETRIES = 5
+FIRMWARE_CHUNK_WRITE_RETRIES = 5
 FIRMWARE_FLASH_ERASED_VALUE = 0xFF
 
 _message = Message()
@@ -497,7 +498,7 @@ async def _firmware_send_start_data_block(nickname: int, block_id: int) -> bool:
     return result
 
 
-async def _firmware_send_data_block(nickname: int, chunk_gap: int, block: list, progress: float, progress_chunk: float) -> bool: # pylint: disable=too-many-locals
+async def _firmware_send_data_chunk(nickname: int, chunk_gap: int, chunk: list) -> bool:
     result = False
     vscp_msg = {
         'class':        {'id': None,    'name': 'CLASS1.PROTOCOL'},
@@ -506,43 +507,84 @@ async def _firmware_send_data_block(nickname: int, chunk_gap: int, block: list, 
         'nickName':     _this_nickname,
         'isHardCoded':  False,
         }
+    await asyncio.sleep(chunk_gap)
+    vscp_msg['data'] = chunk
+    retry = 0
+    while retry < FIRMWARE_CHUNK_WRITE_RETRIES:
+        norepeat = False
+        retry += 1
+        _message.send(vscp_msg)
+        for idx in range(PROBE_RETRIES_SHORT):
+            norepeat = (idx + 1) >= PROBE_RETRIES_SHORT
+            stop = False
+            while _message.available() > 0:
+                # pylint: disable=unsubscriptable-object
+                vscp_result = _message.pop_front()
+                check = (   (vscp_result['class']['name'] == 'CLASS1.PROTOCOL')
+                        and (vscp_result['nickName'] == nickname)
+                        )
+                if check is True:
+                    match vscp_result['type']['name']:
+                        case 'BLOCK_CHUNK_ACK':
+                            norepeat = True
+                            stop = True
+                        case 'BLOCK_CHUNK_NACK':
+                            stop = True
+                        case _:
+                            pass
+                if stop is True:
+                    break
+            # pylint: enable=unsubscriptable-object
+            if stop is True:
+                break
+            await asyncio.sleep(PROBE_SLEEP)
+        if norepeat is True:
+            result = True
+            retry = FIRMWARE_CHUNK_WRITE_RETRIES
+    return result
+
+
+async def _firmware_send_data_block(nickname: int, chunk_gap: int, block: list, progress: float, progress_chunk: float) -> bool: # pylint: disable=too-many-locals
+    result = False
     block_crc = Calculator(Crc16.IBM_3740, True).checksum(bytes(block))
     chunks = int(len(block) / MAX_CAN_DLC)
     step = progress_chunk / chunks
     block_progress = progress
     for chunk in [block[i:i + MAX_CAN_DLC] for i in range(0, len(block), MAX_CAN_DLC)]:
-        await asyncio.sleep(chunk_gap)
-        vscp_msg['data'] = chunk
-        _message.send(vscp_msg)
+        result = await _firmware_send_data_chunk(nickname, chunk_gap, chunk)
+        if result is False:
+            break
         block_progress = block_progress + step
         _update_scan_progress(block_progress)
-    stop = False
-    for _ in range(PROBE_RETRIES_LONG):
-        await asyncio.sleep(PROBE_SLEEP)
-        while _message.available() > 0:
-            # pylint: disable=unsubscriptable-object
-            vscp_result = _message.pop_front()
-            check = (   (vscp_result['class']['name'] == vscp_msg['class']['name'])
-                    and (vscp_result['nickName'] == nickname)
-                    )
-            if check is True:
-                match vscp_result['type']['name']:
-                    case 'BLOCK_DATA_ACK':
-                        try:
-                            received_crc = int.from_bytes(bytes(vscp_result['data'][:2]), 'big')
-                        except ValueError:
-                            received_crc = None
-                        if isinstance(received_crc, int) and received_crc == block_crc:
-                            result = True
-                        stop = True
-                    case 'BLOCK_DATA_NACK':
-                        stop = True
-                    case _:
-                        pass
-            # pylint: enable=unsubscriptable-object
-        if stop is True:
-            _message.flush()
-            break
+    if result is True:
+        stop = False
+        result = False
+        for _ in range(PROBE_RETRIES_LONG):
+            await asyncio.sleep(PROBE_SLEEP)
+            while _message.available() > 0:
+                # pylint: disable=unsubscriptable-object
+                vscp_result = _message.pop_front()
+                check = (   (vscp_result['class']['name'] == 'CLASS1.PROTOCOL')
+                        and (vscp_result['nickName'] == nickname)
+                        )
+                if check is True:
+                    match vscp_result['type']['name']:
+                        case 'BLOCK_DATA_ACK':
+                            try:
+                                received_crc = int.from_bytes(bytes(vscp_result['data'][:2]), 'big')
+                            except ValueError:
+                                received_crc = None
+                            if isinstance(received_crc, int) and received_crc == block_crc:
+                                result = True
+                            stop = True
+                        case 'BLOCK_DATA_NACK':
+                            stop = True
+                        case _:
+                            pass
+                # pylint: enable=unsubscriptable-object
+            if stop is True:
+                _message.flush()
+                break
     return result
 
 
