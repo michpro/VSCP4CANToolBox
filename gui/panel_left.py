@@ -2,6 +2,8 @@
 # pylint: disable=line-too-long
 
 import os
+import re
+import requests
 import tk_async_execute as tae
 import customtkinter as ctk
 from CTkMessagebox import CTkMessagebox
@@ -11,6 +13,7 @@ from .treeview import CTkTreeview
 from .common import add_set_state_callback, call_set_scan_widget_state,     \
                     add_neighbours_handle, neighbours_handle
 from .popup import CTkFloatingWindow
+from .node_config import NodeConfiguration
 
 
 class LeftPanel(ctk.CTkFrame):
@@ -245,6 +248,8 @@ class Neighbours(ctk.CTkFrame):
     def __init__(self, parent):
         super().__init__(parent)
         self.selected_row_id = ''
+        self.parent = parent
+        self.config_window = None
 
         header = [('node', 'Node', 75, 75, 'center', 'w'),
                   ('description', '', 356, 356, 'center', 'w'),
@@ -257,12 +262,26 @@ class Neighbours(ctk.CTkFrame):
         self.neighbours.treeview.bind('<Button-3>', lambda event: self._show_menu(event, self.dropdown))
 
         self.dropdown = CTkFloatingWindow(self.neighbours)
-        dropdown_bt_firmware = ctk.CTkButton(self.dropdown.frame, border_spacing=0, corner_radius=0,
-                                             text="Upload Firmware", command=self._firmware_upload)
-        dropdown_bt_firmware.pack(expand=True, fill="x", padx=0, pady=0)
-        dropdown_bt_chg_node_id = ctk.CTkButton(self.dropdown.frame, border_spacing=0, corner_radius=0,
-                                                text="Change Node ID", command=self._change_node_id)
-        dropdown_bt_chg_node_id.pack(expand=True, fill="x", padx=0, pady=0)
+        self.dropdown_bt_firmware = ctk.CTkButton(self.dropdown.frame, border_spacing=0, corner_radius=0,
+                                                  text="Upload Firmware", command=self._firmware_upload)
+        self.dropdown_bt_firmware.pack(expand=True, fill="x", padx=0, pady=0)
+        self.dropdown_bt_configure = ctk.CTkButton(self.dropdown.frame, border_spacing=0, corner_radius=0,
+                                                   text="Configure Node", command=self._configure_node)
+        self.dropdown_bt_configure.pack(expand=True, fill="x", padx=0, pady=0)
+        self.dropdown_bt_chg_node_id = ctk.CTkButton(self.dropdown.frame, border_spacing=0, corner_radius=0,
+                                                   text="Change Node ID", command=self._change_node_id)
+        self.dropdown_bt_chg_node_id.pack(expand=True, fill="x", padx=0, pady=0)
+        # TODO remove
+        # data = []
+        # for idx in range(1, 4):
+        #     node_id = f"0x{idx:02X}"
+        #     entry = {'text': node_id,
+        #                 'child': [{'text': 'GUID:', 'values': f'FA:FA:FA:{idx:02d}'}, 
+        #                           {'text': 'MDF:',  'values': f'http://vscp.local/mdf/xxx{idx}.mdf'}
+        #                          ]
+        #             }
+        #     data.append(entry)
+        # self.insert(data)
 
 
     def insert(self, row_data):
@@ -291,6 +310,12 @@ class Neighbours(ctk.CTkFrame):
             menu.grab_release()
 
 
+    def _set_menu_items_state(self, state):
+        self.dropdown_bt_firmware.configure(state=state)
+        self.dropdown_bt_configure.configure(state=state)
+        self.dropdown_bt_chg_node_id.configure(state=state)
+
+
     def _get_node_id(self) -> int:
         parent_id = self.neighbours.treeview.parent(self.selected_row_id)
         text = self.neighbours.treeview.item(parent_id)['text'] if parent_id else   \
@@ -299,6 +324,36 @@ class Neighbours(ctk.CTkFrame):
             result = int(text, 0)
         except ValueError:
             result = -1
+        return result
+
+
+    def _get_mdf_link(self) -> str:
+        result = ''
+        parent_id = self.neighbours.treeview.parent(self.selected_row_id)
+        if not parent_id:
+            parent_id = self.selected_row_id
+        for item in self.neighbours.treeview.get_children(item=parent_id):
+            if 'MDF' in self.neighbours.treeview.item(item)['text']:
+                try:
+                    result = self.neighbours.treeview.item(item)['values'][0]
+                    break
+                except KeyError:
+                    pass
+        return result
+
+
+    def _get_guid(self) -> str:
+        result = ''
+        parent_id = self.neighbours.treeview.parent(self.selected_row_id)
+        if not parent_id:
+            parent_id = self.selected_row_id
+        for item in self.neighbours.treeview.get_children(item=parent_id):
+            if 'GUID' in self.neighbours.treeview.item(item)['text']:
+                try:
+                    result = self.neighbours.treeview.item(item)['values'][0]
+                    break
+                except KeyError:
+                    pass
         return result
 
 
@@ -337,5 +392,43 @@ class Neighbours(ctk.CTkFrame):
             CTkMessagebox(title='Error', message='Undefined Node ID!!!', icon='cancel')
 
 
+    def _get_local_mdf(self):
+        CTkMessagebox(title='Info', message='Not implemented yet')
+        return ''
+
+
+    def _configure_node(self):
+        node_id = self._get_node_id()
+        guid = self._get_guid()
+        mdf_link = self._get_mdf_link()
+        if 'vscp.local' in mdf_link.lower():
+            mdf_link = re.sub(re.escape('vscp.local'), 'localhost', mdf_link, flags=re.IGNORECASE)
+        mdf = ''
+        try:
+            req = requests.get(mdf_link, timeout=5)
+            if 200 == int(req.status_code):
+                mdf = req.content
+        except: # pylint: disable=bare-except
+            pass
+        if not mdf:
+            mdf = self._get_local_mdf() # pylint: disable=assignment-from-none
+        if mdf:
+            vscp.mdf.parse(mdf)
+            self.config_window = NodeConfiguration(self, node_id, guid)
+            self._set_menu_items_state('disabled')
+        else:
+            CTkMessagebox(title='Error', message='No valid MDF file for the selected node!!!', icon='cancel')
+
+
     def _change_node_id(self):
         CTkMessagebox(title='Info', message='Not implemented yet')
+
+
+    def close_node_configuration(self):
+        try:
+            self.config_window.window.destroy()
+        except: # pylint: disable=bare-except
+            pass
+        finally:
+            self.config_window = None
+            self._set_menu_items_state('normal')

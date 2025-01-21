@@ -3,6 +3,7 @@
 from vscp.dictionary import dictionary
 from vscp.message import Message
 from vscp.callback import Callback
+from vscp.mdf_parser import mdf
 from vscp.tools import  is_async_work, add_scan_progress_observer,      \
                         set_this_node_nickname, get_this_node_nickname, \
                         is_node_on_list, append_node, get_nodes,        \
