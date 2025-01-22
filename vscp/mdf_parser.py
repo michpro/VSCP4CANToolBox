@@ -74,11 +74,10 @@ class MdfParser:
                     for subidx, subitem in enumerate(value):
                         if 'valuelist' in subitem:
                             data[idx]['bit'][subidx]['valuelist'] = self._normalize_xml_valuelist(subitem['valuelist']) # pylint: disable=line-too-long
-                        else:
-                            for key in keys:
-                                subvalue = data[idx]['bit'][subidx].get(key, None)
-                                if subvalue is not None:
-                                    data[idx]['bit'][subidx][key] = self._normalize_xml_values(subvalue) # pylint: disable=line-too-long
+                        for key in keys:
+                            subvalue = data[idx]['bit'][subidx].get(key, None)
+                            if subvalue is not None:
+                                data[idx]['bit'][subidx][key] = self._normalize_xml_values(subvalue)
         return data
 
 
