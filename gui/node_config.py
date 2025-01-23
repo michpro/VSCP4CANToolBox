@@ -1,11 +1,11 @@
-# pylint: disable=missing-module-docstring, missing-class-docstring, missing-function-docstring
+# pylint: disable=line-too-long, missing-module-docstring, missing-class-docstring, missing-function-docstring
 
 import os
 import pprint # TODO remove
 import customtkinter as ctk
 import vscp
 
-class NodeConfiguration:
+class NodeConfiguration: # pylint: disable=too-many-instance-attributes, too-few-public-methods
     def __init__(self, parent, node_id: int, guid: str):
         super().__init__()
         self.window = ctk.CTkToplevel(parent)
@@ -27,12 +27,81 @@ class NodeConfiguration:
         self.window.protocol('WM_DELETE_WINDOW', self._window_exit)
         self.window.after(250, lambda: self.window.iconbitmap(icon_path)) # show icon workaround
 
-        self.mdf = vscp.mdf.get()['vscp']['module']
-        # pp = pprint.PrettyPrinter(indent=4) # TODO remove
-        # pp.pprint(self.mdf)
-        # print(self.mdf['description'])
-        # print(self.mdf['vscp']['module']['registers'])
+        self.config_panel = ctk.CTkFrame(self.window, corner_radius=0)
+        self.config_panel.pack(fill='both', expand=True)
+
+        self.config = ConfigPanel(self.config_panel)
+
+        self.info_panel = ctk.CTkFrame(self.config_panel, height=150)
+        self.info_panel.pack(padx=5, pady=(0, 5), side='top', anchor='s', fill='both', expand=False)
+
+        self.info = InfoPanel(self.info_panel)
+        self.info.display({**vscp.mdf.get_module_info(), **vscp.mdf.get_boot_algorithm()})
 
 
     def _window_exit(self):
         self.parent.close_node_configuration()
+
+
+class InfoPanel(ctk.CTkFrame): # pylint: disable=too-many-ancestors
+    def __init__(self, parent):
+        self.parent = parent
+        super().__init__(self.parent)
+
+        font = ctk.CTkFont(family='Ubuntu Mono', size=16)
+        self.event_info = ctk.CTkTextbox(self.parent, font=font, border_spacing=1, fg_color=self._fg_color)
+        self.event_info.pack(padx=(5, 5), pady=(5, 5), side='top', anchor='nw', fill='both', expand=True)
+        self.event_info.bind("<Button-1>", 'break')
+        self.event_info.configure(state='disabled')
+
+
+    def display(self, data: dict) -> None:
+        # pp = pprint.PrettyPrinter(indent=2, width=160) # TODO remove
+        # pp.pprint(data)
+
+        self.event_info.configure(state='normal')
+        self.event_info.delete('1.0', 'end')
+        if 0 != len(data): # TODO implement
+            keys = [{'name':        ['Name',                    'br',   None]},
+                    {'model':       ['Model',                   'br',   None]},
+                    {'version':     ['Version',                 'br',   None]},
+                    {'level':       ['VSCP level',              '',     None]},
+                    {'buffersize':  ['max VSCP event size',     '',     None]},
+                    {'changed':     ['Date',                    'br',   None]},
+                    {'algorithm':   ['Bootloader Algorithm',    '',     vscp.dictionary.convert_blalgo]},
+                    {'blockcount':  ['Firmware memory blocks',  '',     None]},
+                    {'blocksize':   ['Memory block size',       'br',   None]},
+                    {'infourl':     ['Homepage',                'br',   None]},
+                    {'description': ['Description',             'eof',  None]}]
+            info = ''
+            for key in keys:
+                data_key = next(iter(key))
+                val = data.get(data_key, None)
+                if val is not None:
+                    info += key[data_key][0] + ': '
+                    info += str(val) if key[data_key][2] is None else key[data_key][2]([int(val)], None)
+                    info += ' '
+                    if 'br' in key[data_key][1]:
+                        info += os.linesep
+                    elif 'eof' not in key[data_key][1]:
+                        info += ' |  '
+            self.event_info.insert('end', info)
+        self.event_info.configure(state='disabled')
+
+
+class ConfigPanel(ctk.CTkFrame): # pylint: disable=too-many-ancestors
+    def __init__(self, parent):
+        super().__init__(parent)
+
+        self.widget = ctk.CTkTabview(parent)
+        self.widget.pack(padx=5, pady=(0, 5), fill='both', expand=True)
+
+        self.tabs_names =['Registers', 'Remote Variables', 'Decision Matrix', 'Files']
+        self.tabs = []
+        labels = []
+        for idx, tab in enumerate(self.tabs_names):
+            self.tabs.append(self.widget.add(tab))
+            if 0 < idx:
+                labels.append(ctk.CTkLabel(self.widget.tab(tab), text='UNIMPLEMENTED',
+                                           font=('TkDefaultFont', 22, 'bold'), pady=40).pack())
+        self.widget.set(self.tabs_names[0])

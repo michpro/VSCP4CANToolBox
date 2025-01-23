@@ -34,8 +34,45 @@ class MdfParser:
         return self.mdf
 
 
+    def parse_variable(self, lang: str, var) -> str:
+        result = var.get(lang, '') if isinstance(var, dict) else var
+        return result
+
     def get_module_info(self) -> dict:
-        return {}
+        result = {}
+        result['name']          = self.mdf.get('name', '')
+        result['model']         = self.mdf.get('model', '')
+        result['version']       = self.mdf.get('version', '')
+        result['description']   = self.mdf.get('description', '')
+        result['infourl']       = self.mdf.get('infourl', '')
+        result['buffersize']    = self.mdf.get('buffersize', '')
+        result['level']         = self.mdf.get('level', '1')
+        result['changed']       = self.mdf.get('changed', '')
+        if 'xml' == self.source:
+            result = self._normalize_xml_keys(result)
+            keys = ['description', 'name', 'infourl']
+            for key in keys:
+                value = result.get(key, None)
+                if value is not None:
+                    result[key] = self._normalize_xml_values(value)
+        description = result['description']
+        if isinstance(description, dict):
+            lang = ['en', 'eng']
+            found = False
+            for key in lang:
+                if key in description:
+                    val = description[key]
+                    found = True
+                    break
+            if found is False:
+                val = description[list(description)[-1]]
+            result['description'] = val
+        return result
+
+
+    def get_module_manufacturer(self) -> dict: # TODO parse data
+        result = self.mdf.get('manufacturer', {})
+        return result
 
 
     def get_boot_algorithm(self) -> dict:

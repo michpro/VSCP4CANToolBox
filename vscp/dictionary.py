@@ -346,7 +346,7 @@ class Dictionary:
         return result
 
 
-    def _convert_blalgo(self, data: list, _) -> str:
+    def convert_blalgo(self, data: list, _) -> str:
         results = {
             0x00:   'VSCP algorithm',
             0x01:   'Microchip PIC algorithm',
@@ -1027,7 +1027,7 @@ class Dictionary:
                     'weekday':  self._convert_weekday,
                     'flags0':   self._convert_flags0,
                     'flags1':   self._convert_flags1,
-                    'blalgo':   self._convert_blalgo,
+                    'blalgo':   self.convert_blalgo,
                     'memtyp':   self._convert_memtyp,
                     'dimtype':  self._convert_dimtype,
                     'reptype':  self._convert_repeattype,
