@@ -273,10 +273,10 @@ class Neighbours(ctk.CTkFrame):
         self.dropdown_bt_chg_node_id.pack(expand=True, fill="x", padx=0, pady=0)
         # TODO remove
         # data = []
-        # for idx in range(1, 4):
+        # for idx in range(1, 5):
         #     node_id = f"0x{idx:02X}"
         #     entry = {'text': node_id,
-        #                 'child': [{'text': 'GUID:', 'values': f'FA:FA:FA:{idx:02d}'}, 
+        #                 'child': [{'text': 'GUID:', 'values': f'FA:FA:FA:{idx:02d}'},
         #                           {'text': 'MDF:',  'values': f'http://vscp.local/mdf/xxx{idx}.mdf'}
         #                          ]
         #             }

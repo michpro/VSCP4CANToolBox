@@ -1,0 +1,13 @@
+* text=auto eol=lf
+.gitattributes eol=lf
+.gitignore  eol=lf
+*.7z        binary
+*.zip       binary
+*.pdf       binary
+*.ttf       binary
+*.png       binary
+*.jpg       binary
+*.ico       binary
+*.bin       binary
+*.dll       binary
+*.so        binary
