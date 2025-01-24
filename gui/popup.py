@@ -1,7 +1,9 @@
 # pylint: disable=missing-module-docstring, too-many-instance-attributes, line-too-long
 
+
 import sys
 import customtkinter as ctk
+
 
 class CTkFloatingWindow(ctk.CTkToplevel): # pylint: disable=too-few-public-methods
     """

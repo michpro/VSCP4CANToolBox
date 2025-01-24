@@ -1,9 +1,11 @@
 # pylint: disable=missing-module-docstring, missing-function-docstring
 
+
 _set_scan_widget_state_cb: object = None
 _neighbours_handle: object = None
 _event_info_handle: object = None
 _nodes: dict = {}
+
 
 def add_set_state_callback(callback) -> None:
     if callable(callback):
@@ -37,7 +39,6 @@ def event_info_handle() -> object:
 
 
 def set_node_info(key: int, value: any) -> None:
-    # global _nodes # pylint: disable=global-statement
     _nodes[key] = value
 
 

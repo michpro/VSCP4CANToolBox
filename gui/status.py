@@ -15,7 +15,6 @@ class StatusFrame(ctk.CTkFrame): # pylint: disable=too-few-public-methods
     def __init__(self, parent):
         super().__init__(parent)
 
-        # self._last_progress = common.get_val('progress')
         elements_fg_color = parent._apply_appearance_mode(ctk.ThemeManager.theme['CTkFrame']['fg_color'])
         current_path = os.path.dirname(os.path.realpath(__file__))
         icon_dir = os.path.join(current_path, 'icons')
@@ -27,7 +26,7 @@ class StatusFrame(ctk.CTkFrame): # pylint: disable=too-few-public-methods
         elements_pady = (2, 2)
         elements_height = widget_height - sum(list(elements_pady))
 
-        self.widget = ctk.CTkFrame(parent, corner_radius=0, height=widget_height)#, fg_color='yellow')
+        self.widget = ctk.CTkFrame(parent, corner_radius=0, height=widget_height)
         self.widget.pack(side='top', anchor='s', fill='both', expand=False)
 
         self.progress = ctk.CTkProgressBar(self.widget, width=250, height=elements_height, border_width=2,
@@ -132,7 +131,3 @@ class StatusFrame(ctk.CTkFrame): # pylint: disable=too-few-public-methods
 
     def update_progress(self, val):
         self.progress.set(val)
-        # if self._last_progress != common.get_val('progress'):
-        #     self._last_progress = common.get_val('progress')
-        #     self.progress.step()
-        #     # self.progress.set(self._last_progress)

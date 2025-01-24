@@ -1,12 +1,15 @@
 # pylint: disable=missing-module-docstring, missing-class-docstring, missing-function-docstring
 
+
 from can.message import Message
 from can.io.generic import MessageWriter
 from .message import Message as VSCPMsg
 
+
 class Callback(MessageWriter):
     cb_func = None
     file = None
+
 
     def __init__(self, cb: list = None) -> None:
         self.write_to_file = False

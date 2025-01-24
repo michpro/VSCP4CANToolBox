@@ -1,11 +1,13 @@
 # pylint: disable=line-too-long, missing-module-docstring, missing-function-docstring
 
+
 import time
 import datetime
 import asyncio
 from crc import Calculator, Crc16
 from .message import Message
 from .utils import search
+
 
 MAX_CAN_DLC = 8
 THIS_NODE_NICKNAME = 0
@@ -20,6 +22,7 @@ FIRMWARE_WRITE_ACK_CHECK_RETRIES = int(BLOCK_WRITE_GAP / PROBE_SLEEP)
 FIRMWARE_BLOCK_WRITE_RETRIES = 5
 FIRMWARE_CHUNK_WRITE_RETRIES = 5
 FIRMWARE_FLASH_ERASED_VALUE = 0xFF
+
 
 _message = Message()
 _nodes: list = []

@@ -1,6 +1,7 @@
 # pylint: disable=missing-module-docstring, missing-class-docstring, missing-function-docstring
 # pylint: disable=line-too-long, too-many-ancestors
 
+
 import os
 import csv
 import customtkinter as ctk

@@ -1,9 +1,10 @@
 # pylint: disable=missing-module-docstring, missing-class-docstring, too-many-ancestors
 
-# from dataclasses import dataclass
+
 import customtkinter as ctk
 from .panel_left import LeftPanel
 from .panel_right import RightPanel
+
 
 class AppFrame(ctk.CTkFrame):
     def __init__(self, parent):
