@@ -1,16 +1,28 @@
 # pylint: disable=line-too-long, missing-module-docstring, missing-class-docstring, missing-function-docstring
+# pylint: disable=too-many-ancestors
+
 
 import os
 import pprint # TODO remove
 import customtkinter as ctk
 import vscp
+from .treeview import CTkTreeview
+
+
+def new_tag_config(self, tagName, **kwargs): # pylint: disable=invalid-name
+    return self._textbox.tag_config(tagName, **kwargs) # pylint: disable=protected-access
+
+
+# workaround for banning 'font' parameter in the 'tag_config' function
+ctk.CTkTextbox.tag_config = new_tag_config
+
 
 class NodeConfiguration: # pylint: disable=too-many-instance-attributes, too-few-public-methods
     def __init__(self, parent, node_id: int, guid: str):
         super().__init__()
         self.window = ctk.CTkToplevel(parent)
-        self.width = 1000
-        self.height = 600
+        self.width = 1025
+        self.height = 650
         self.parent = parent
         self.node_id = node_id
 
@@ -39,29 +51,34 @@ class NodeConfiguration: # pylint: disable=too-many-instance-attributes, too-few
         self.info.display({**vscp.mdf.get_module_info(), **vscp.mdf.get_boot_algorithm()})
 
 
+    def bring_to_front(self):
+        self.window.attributes('-topmost', True)
+        self.window.focus_force()
+        self.window.after(800, lambda: self.window.attributes('-topmost', False))
+
+
     def _window_exit(self):
         self.parent.close_node_configuration()
 
 
-class InfoPanel(ctk.CTkFrame): # pylint: disable=too-many-ancestors
+class InfoPanel(ctk.CTkFrame):
     def __init__(self, parent):
         self.parent = parent
         super().__init__(self.parent)
 
-        font = ctk.CTkFont(family='Ubuntu Mono', size=16)
-        self.event_info = ctk.CTkTextbox(self.parent, font=font, border_spacing=1, fg_color=self._fg_color)
-        self.event_info.pack(padx=(5, 5), pady=(5, 5), side='top', anchor='nw', fill='both', expand=True)
-        self.event_info.bind("<Button-1>", 'break')
-        self.event_info.configure(state='disabled')
+        font = ctk.CTkFont(family='TkDefaultFont', size=15)
+        bold_font = ctk.CTkFont(family='TkDefaultFont', size=15, weight='bold')
+        self.module_info = ctk.CTkTextbox(self.parent, font=font, border_spacing=1, fg_color=self._fg_color)
+        self.module_info.pack(padx=(5, 5), pady=(5, 5), side='top', anchor='nw', fill='both', expand=True)
+        self.module_info.bind("<Button-1>", 'break')
+        self.module_info.configure(state='disabled')
+        self.module_info.tag_config('bold', font=bold_font)
 
 
     def display(self, data: dict) -> None:
-        # pp = pprint.PrettyPrinter(indent=2, width=160) # TODO remove
-        # pp.pprint(data)
-
-        self.event_info.configure(state='normal')
-        self.event_info.delete('1.0', 'end')
-        if 0 != len(data): # TODO implement
+        self.module_info.configure(state='normal')
+        self.module_info.delete('1.0', 'end')
+        if 0 != len(data):
             keys = [{'name':        ['Name',                    'br',   None]},
                     {'model':       ['Model',                   'br',   None]},
                     {'version':     ['Version',                 'br',   None]},
@@ -73,23 +90,23 @@ class InfoPanel(ctk.CTkFrame): # pylint: disable=too-many-ancestors
                     {'blocksize':   ['Memory block size',       'br',   None]},
                     {'infourl':     ['Homepage',                'br',   None]},
                     {'description': ['Description',             'eof',  None]}]
-            info = ''
             for key in keys:
                 data_key = next(iter(key))
                 val = data.get(data_key, None)
                 if val is not None:
-                    info += key[data_key][0] + ': '
-                    info += str(val) if key[data_key][2] is None else key[data_key][2]([int(val)], None)
+                    info = key[data_key][0] + ': '
+                    self.module_info.insert('end', info, 'bold')
+                    info = str(val) if key[data_key][2] is None else key[data_key][2]([int(val)], None)
                     info += ' '
                     if 'br' in key[data_key][1]:
                         info += os.linesep
                     elif 'eof' not in key[data_key][1]:
-                        info += ' |  '
-            self.event_info.insert('end', info)
-        self.event_info.configure(state='disabled')
+                        info += '| '
+                    self.module_info.insert('end', info)
+        self.module_info.configure(state='disabled')
 
 
-class ConfigPanel(ctk.CTkFrame): # pylint: disable=too-many-ancestors
+class ConfigPanel(ctk.CTkFrame):
     def __init__(self, parent):
         super().__init__(parent)
 
@@ -105,3 +122,54 @@ class ConfigPanel(ctk.CTkFrame): # pylint: disable=too-many-ancestors
                 labels.append(ctk.CTkLabel(self.widget.tab(tab), text='UNIMPLEMENTED',
                                            font=('TkDefaultFont', 22, 'bold'), pady=40).pack())
         self.widget.set(self.tabs_names[0])
+
+        self.registers = RegistersTab(self.widget.tab(self.tabs_names[0]))
+
+
+class RegistersTab(ctk.CTkFrame):
+    def __init__(self, parent):
+        self.parent = parent
+        self.registers = {}
+        super().__init__(self.parent)
+
+        self.widget = ctk.CTkFrame(parent, fg_color='transparent')
+        self.widget.pack(padx=0, pady=0, side='top', anchor='nw', fill='both', expand=True)
+
+        header = [('address', 'Page:Offset', 80, 80, 'center', 'center'),
+                  ('access', 'Access', 45, 45, 'center', 'center'),
+                  ('value', 'Value', 45, 45, 'center', 'center'),
+                  ('toSync', 'To Sync', 45, 45, 'center', 'center'),
+                  ('name', '  Name', 505, 505, 'w', 'w'),
+                 ]
+        self.registers = CTkTreeview(self.widget, header, xscroll=False)
+        self.registers.pack(side='left', padx=0, pady=0, fill='both', expand=True)
+        # self.registers.treeview.bind('<Double-Button-1>', self.item_deselect)
+        # self.registers.treeview.bind('<Button-3>', lambda event: self._show_menu(event, self.dropdown))
+        # self.registers.treeview.bind('<<TreeviewSelect>>', self._parse_msg_data)
+
+        font = ctk.CTkFont(family='TkDefaultFont', size=15)
+        bold_font = ctk.CTkFont(family='TkDefaultFont', size=15, weight='bold')
+        self.registers_info = ctk.CTkTextbox(self.widget, font=font, width=250, border_spacing=1, fg_color=self._fg_color)
+        self.registers_info.pack(padx=(5, 0), pady=0, side='right', anchor='ne', fill='y', expand=False)
+        self.registers_info.bind("<Button-1>", 'break')
+        self.registers_info.configure(state='disabled')
+        self.registers_info.tag_config('bold', font=bold_font)
+
+        self.registers_data = vscp.mdf.get_registers_info()
+        self._insert_registers_data()
+
+        # pp = pprint.PrettyPrinter(indent=2, width=160) # TODO remove
+        # pp.pprint(self.registers_data)
+
+
+    def _insert_registers_data(self):
+        result = []
+        for page, registers in self.registers_data.items():
+            child = []
+            for register, data in registers.items():
+                row = {'text': f'0x{register:02X}', 'values': [data['access'], data['value'], data['to_sync'], data['name']]}
+                child.append(row)
+            entry = {'text': f'Page {page:d}', 'child': child}
+            result.append(entry)
+        if result:
+            self.registers.insert_items(result)
