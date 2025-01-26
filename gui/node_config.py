@@ -21,7 +21,7 @@ class NodeConfiguration: # pylint: disable=too-many-instance-attributes, too-few
     def __init__(self, parent, node_id: int, guid: str):
         super().__init__()
         self.window = ctk.CTkToplevel(parent)
-        self.width = 1025
+        self.width = 1050
         self.height = 650
         self.parent = parent
         self.node_id = node_id
@@ -135,7 +135,7 @@ class RegistersTab(ctk.CTkFrame):
         self.widget = ctk.CTkFrame(parent, fg_color='transparent')
         self.widget.pack(padx=0, pady=0, side='top', anchor='nw', fill='both', expand=True)
 
-        header = [('address', 'Page:Offset', 80, 80, 'center', 'center'),
+        header = [('address', 'Page:Offset', 105, 105, 'center', 'center'),
                   ('access', 'Access', 45, 45, 'center', 'center'),
                   ('value', 'Value', 45, 45, 'center', 'center'),
                   ('toSync', 'To Sync', 45, 45, 'center', 'center'),
@@ -169,7 +169,8 @@ class RegistersTab(ctk.CTkFrame):
             for register, data in registers.items():
                 row = {'text': f'0x{register:02X}', 'values': [data['access'], data['value'], data['to_sync'], data['name']]}
                 child.append(row)
-            entry = {'text': f'Page {page:d}', 'child': child}
+            text = f'Page {page:d}' if 0 <= page else 'Standard regs'
+            entry = {'text': text, 'child': child}
             result.append(entry)
         if result:
             self.registers.insert_items(result)

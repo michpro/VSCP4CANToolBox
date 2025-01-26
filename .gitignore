@@ -1,3 +1,4 @@
+mdf/*
 .venv
 *.bak
 __pycache__
