@@ -9,7 +9,7 @@ uptime
 pyserial
 pyusb
 libusb
-python-can
+python-can==4.5.0
 pillow
 tk
 customtkinter
