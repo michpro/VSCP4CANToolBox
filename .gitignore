@@ -1,4 +1,12 @@
 mdf/*
+__pycache__
 .venv
 *.bak
-__pycache__
+*.h
+*.cpp
+*.hex
+*.bin
+*.csv
+*.txt
+!requirements.txt
+*test*
