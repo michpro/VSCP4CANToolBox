@@ -1,8 +1,15 @@
-# pylint: disable=missing-module-docstring, missing-class-docstring, missing-function-docstring, too-many-ancestors
-# pylint: disable=line-too-long
+"""
+Left panel module for the VSCP application.
+
+This module handles the left-side panel of the GUI, including the neighbourhood
+scanning functionality, node listing, and general node management actions like
+firmware upload and configuration.
+"""
+# pylint: disable=too-many-ancestors, line-too-long
 
 import os
 import re
+from pathlib import Path
 import requests
 import tk_async_execute as tae
 import customtkinter as ctk
@@ -17,7 +24,19 @@ from .node_config import NodeConfiguration
 
 
 class LeftPanel(ctk.CTkFrame):
+    """
+    Main container for the left panel of the application.
+
+    Holds the Neighbourhood widget and general command buttons (e.g., Send Host DateTime).
+    """
+
     def __init__(self, parent):
+        """
+        Initialize the LeftPanel.
+
+        Args:
+            parent: The parent widget associated with this frame.
+        """
         self.parent = parent
         super().__init__(self.parent)
 
@@ -37,10 +56,17 @@ class LeftPanel(ctk.CTkFrame):
 
 
     def button_cb(self):
+        """Callback for the 'Send Host DateTime' button."""
         tae.async_execute(vscp.send_host_datetime(), visible=False)
 
 
     def button1_cb(self): # TODO remove
+        """
+        Temporary test callback.
+        
+        Todo:
+            Remove this method before final release.
+        """
         # tae.async_execute(vscp.set_nickname(0x02, 0x0A), visible=False)
         # tae.async_execute(vscp.set_nickname(0x0A, 0x02), visible=False)
         # tae.async_execute(vscp.scan(0, 20), visible=False)
@@ -48,7 +74,19 @@ class LeftPanel(ctk.CTkFrame):
 
 
 class Neighbourhood(ctk.CTkFrame):
+    """
+    Container for the VSCP scanning tools and the node list.
+
+    Combines the ScanWidget (inputs and scan button) and the Neighbours widget (treeview).
+    """
+
     def __init__(self, parent):
+        """
+        Initialize the Neighbourhood frame.
+
+        Args:
+            parent: The parent widget associated with this frame.
+        """
         self.parent = parent
         super().__init__(self.parent)
 
@@ -65,7 +103,19 @@ class Neighbourhood(ctk.CTkFrame):
 
 
 class ScanWidget(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
+    """
+    Widget containing controls for scanning VSCP nodes.
+
+    Allows the user to define a start/stop ID range and initiate a scan.
+    """
+
     def __init__(self, parent):
+        """
+        Initialize the ScanWidget.
+
+        Args:
+            parent: The parent widget associated with this frame.
+        """
         self.parent = parent
         super().__init__(self.parent)
         # self.add_node_in_progress = False
@@ -108,18 +158,34 @@ class ScanWidget(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
 
 
     def _min_id_format(self, _):
+        """Format the Start ID input to hex style (e.g., 0x01) on key release."""
         input_str = self.min_id_var.get()
         if input_str.lower().startswith('0x'):
             self.min_id_var.set(input_str[:2].lower() + input_str[2:].upper())
 
 
     def _min_id_focus_out(self, _): # TODO implement
+        """
+        Handle focus out event for Min ID entry.
+        
+        Todo:
+            Implement logic to update internal state or handle validation on exit.
+        """
         pass
         # self.max_range[0] = int(self.min_id_var.get(), 0)
         # print('max range', self.max_range)
 
 
     def _validate_start(self, input_str):
+        """
+        Validate the Start ID input.
+        
+        Args:
+            input_str: The current string in the entry widget.
+            
+        Returns:
+            bool: True if input is valid, False otherwise.
+        """
         result = True
         if 0 != len(input_str):
             if input_str.lower().startswith('0x'):
@@ -143,18 +209,34 @@ class ScanWidget(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
 
 
     def _max_id_format(self, _):
+        """Format the Stop ID input to hex style (e.g., 0xFF) on key release."""
         input_str = self.max_id_var.get()
         if input_str.lower().startswith('0x'):
             self.max_id_var.set(input_str[:2].lower() + input_str[2:].upper())
 
 
     def _max_id_focus_out(self, _): # TODO implement
+        """
+        Handle focus out event for Max ID entry.
+        
+        Todo:
+            Implement logic to update internal state or handle validation on exit.
+        """
         pass
         # self.min_range[1] = int(self.max_id_var.get(), 0)
         # print('min range', self.min_range)
 
 
     def _validate_stop(self, input_str):
+        """
+        Validate the Stop ID input.
+
+        Args:
+            input_str: The current string in the entry widget.
+
+        Returns:
+            bool: True if input is valid, False otherwise.
+        """
         result = True
         if 0 != len(input_str):
             if input_str.lower().startswith('0x'):
@@ -178,10 +260,17 @@ class ScanWidget(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
 
 
     def _button_scan_callback(self):
+        """Initiate the scan process asynchronously."""
         tae.async_execute(self._call_scan(), visible=False)
 
 
     async def _call_scan(self):
+        """
+        Perform the actual node scanning logic.
+
+        Reads the min/max ID, calls the vscp library to scan, and populates
+        the neighbours treeview with results.
+        """
         min_id = int(self.min_id_var.get(), 0)
         max_id = int(self.max_id_var.get(), 0)
         nodes = await vscp.scan(min_id, max_id)
@@ -236,6 +325,12 @@ class ScanWidget(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
 
 
     def set_scan_widget_state(self, state):
+        """
+        Enable or disable the scan widget controls.
+
+        Args:
+            state: The state to set ('normal' or 'disabled').
+        """
         self.l_min_id.configure(state=state)
         self.min_id.configure(state=state)
         self.l_max_id.configure(state=state)
@@ -245,7 +340,20 @@ class ScanWidget(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
 
 
 class Neighbours(ctk.CTkFrame):
+    """
+    Widget displaying a treeview of discovered VSCP nodes.
+
+    Provides a context menu (right-click) for node operations like firmware upload
+    and configuration.
+    """
+
     def __init__(self, parent):
+        """
+        Initialize the Neighbours widget.
+
+        Args:
+            parent: The parent widget associated with this frame.
+        """
         super().__init__(parent)
         self.selected_row_id = ''
         self.parent = parent
@@ -285,10 +393,17 @@ class Neighbours(ctk.CTkFrame):
 
 
     def insert(self, row_data):
+        """
+        Insert data rows into the neighbours treeview.
+
+        Args:
+            row_data: The data structure to insert into the treeview.
+        """
         self.neighbours.insert_items(row_data)
 
 
     def _item_deselect(self, event):
+        """Handle double-click to deselect an item in the treeview."""
         selected_rows = self.neighbours.treeview.selection()
         row_clicked = self.neighbours.treeview.identify('row', event.x, event.y)
         index = selected_rows.index(row_clicked) if row_clicked in selected_rows else -1
@@ -297,11 +412,19 @@ class Neighbours(ctk.CTkFrame):
 
 
     def delete_all_items(self) -> None:
+        """Remove all items from the neighbours treeview."""
         for item in self.neighbours.treeview.get_children():
             self.neighbours.treeview.delete(item)
 
 
     def _show_menu(self, event, menu):
+        """
+        Display the context menu on right-click.
+
+        Args:
+            event: The mouse event triggering the menu.
+            menu: The menu widget to display.
+        """
         self.selected_row_id = self.neighbours.treeview.identify('row', event.x, event.y)
         try:
             if '' != self.selected_row_id:
@@ -311,12 +434,24 @@ class Neighbours(ctk.CTkFrame):
 
 
     def _set_menu_items_state(self, state):
+        """
+        Set the enabled/disabled state of the context menu items.
+
+        Args:
+            state: The state to set ('normal' or 'disabled').
+        """
         self.dropdown_bt_firmware.configure(state=state)
         self.dropdown_bt_configure.configure(state=state)
         self.dropdown_bt_chg_node_id.configure(state=state)
 
 
     def _get_node_id(self) -> int:
+        """
+        Retrieve the Node ID of the currently selected row.
+
+        Returns:
+            int: The node ID, or -1 if invalid or not found.
+        """
         parent_id = self.neighbours.treeview.parent(self.selected_row_id)
         text = self.neighbours.treeview.item(parent_id)['text'] if parent_id else   \
             self.neighbours.treeview.item(self.selected_row_id)['text']
@@ -328,6 +463,12 @@ class Neighbours(ctk.CTkFrame):
 
 
     def _get_mdf_link(self) -> str:
+        """
+        Retrieve the MDF link associated with the selected node.
+
+        Returns:
+            str: The URL of the MDF file.
+        """
         result = ''
         parent_id = self.neighbours.treeview.parent(self.selected_row_id)
         if not parent_id:
@@ -343,6 +484,12 @@ class Neighbours(ctk.CTkFrame):
 
 
     def _get_guid(self) -> str:
+        """
+        Retrieve the GUID of the selected node.
+
+        Returns:
+            str: The Globally Unique Identifier of the node.
+        """
         result = ''
         parent_id = self.neighbours.treeview.parent(self.selected_row_id)
         if not parent_id:
@@ -358,6 +505,15 @@ class Neighbours(ctk.CTkFrame):
 
 
     def _confirm_firmware_upload(self, node_id: int) -> bool:
+        """
+        Ask user for confirmation before uploading firmware.
+
+        Args:
+            node_id: The ID of the node to receive firmware.
+
+        Returns:
+            bool: True if confirmed, False otherwise.
+        """
         title = 'Uploading new firmware'
         message = f'Are you sure you want to upload new firmware to node 0x{node_id:02X}?'
         msg = CTkMessagebox(title=title, message=message, icon='question',
@@ -367,6 +523,12 @@ class Neighbours(ctk.CTkFrame):
 
 
     def _firmware_upload(self):
+        """
+        Handle the firmware upload process.
+
+        Opens a file dialog to select the firmware file (hex/bin) and initiates
+        the async upload if confirmed.
+        """
         node_id = self._get_node_id()
         if -1 < node_id:
             current_path = os.getcwd()
@@ -393,11 +555,36 @@ class Neighbours(ctk.CTkFrame):
 
 
     def _get_local_mdf(self):
-        CTkMessagebox(title='Info', message='Not implemented yet')
-        return ''
+        """
+        Open a file dialog to select and read a local MDF file.
+
+        Returns:
+            bytes: The content of the selected MDF file as bytes, or an empty string on failure.
+        """
+        result = ''
+        node_id = self._get_node_id()
+        if -1 < node_id:
+            current_path = os.getcwd()
+            filetypes = (('MDF files', '*.mdf'),)
+            mdf_path = ctk.filedialog.askopenfilename(title=f'Select Module Description File for node 0x{node_id:02X}',
+                                                    initialdir=current_path,
+                                                    filetypes=filetypes)
+            try:
+                result = Path(mdf_path).read_bytes()
+            except: # pylint: disable=bare-except
+                pass
+        else:
+            CTkMessagebox(title='Error', message='Undefined Node ID!!!', icon='cancel')
+        return result
 
 
     def _configure_node(self):
+        """
+        Handle node configuration.
+
+        Fetches the MDF file (either from URL or local fallback), parses it,
+        and opens the NodeConfiguration window.
+        """
         node_id = self._get_node_id()
         guid = self._get_guid()
         mdf_link = self._get_mdf_link()
@@ -411,20 +598,32 @@ class Neighbours(ctk.CTkFrame):
         except: # pylint: disable=bare-except
             pass
         if not mdf:
-            mdf = self._get_local_mdf() # pylint: disable=assignment-from-none
+            mdf = self._get_local_mdf()
         if mdf:
-            vscp.mdf.parse(mdf)
-            self.config_window = NodeConfiguration(self, node_id, guid)
-            self._set_menu_items_state('disabled')
+            try:
+                vscp.mdf.parse(mdf)
+                self._set_menu_items_state('disabled')
+                self.config_window = NodeConfiguration(self, node_id, guid)
+                self.config_window.bring_to_front()
+            except: # pylint: disable=bare-except
+                CTkMessagebox(title='Error', message='Error while parsing an MDF file!!!', icon='cancel')
         else:
             CTkMessagebox(title='Error', message='No valid MDF file for the selected node!!!', icon='cancel')
 
 
     def _change_node_id(self):
+        """
+        Handle changing the node ID (Not implemented yet).
+        """
         CTkMessagebox(title='Info', message='Not implemented yet')
 
 
     def close_node_configuration(self):
+        """
+        Cleanup callback when the node configuration window is closed.
+
+        Destroys the window instance and re-enables menu items.
+        """
         try:
             self.config_window.window.destroy()
         except: # pylint: disable=bare-except

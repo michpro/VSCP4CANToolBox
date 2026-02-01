@@ -1,4 +1,12 @@
-# pylint: disable=too-many-lines, line-too-long, missing-module-docstring, missing-class-docstring, missing-function-docstring
+# pylint: disable=too-many-lines, line-too-long
+
+"""
+VSCP Dictionary Module.
+
+This module provides the Dictionary class which acts as a lookup and translation
+layer for VSCP (Very Simple Control Protocol) classes, types, priorities, and data formats.
+It contains extensive definitions of VSCP Class 1 protocol definitions.
+"""
 
 
 import os
@@ -14,15 +22,39 @@ MULTILINE_INDENT = 18
 
 
 class Dictionary:
+    """
+    Handles lookups and conversions for VSCP definitions.
+
+    This class provides methods to resolve IDs to names (and vice versa) for
+    VSCP priorities, classes, and types. It also handles the parsing and
+    formatting of VSCP message data based on the defined data structures.
+    """
+
     def __init__(self) -> None:
+        """Initializes the Dictionary instance."""
         pass
 
 
     def get(self) -> list:
+        """
+        Retrieves the main dictionary of VSCP Class 1 definitions.
+
+        Returns:
+            list: The list of VSCP Class 1 definitions.
+        """
         return _vscp_class_1_dict
 
 
     def priority_id(self, name: str) -> int:
+        """
+        Retrieves the ID for a given priority name.
+
+        Args:
+            name (str): The name of the priority.
+
+        Returns:
+            int: The priority ID, or the lowest priority ID if not found.
+        """
         result = search(name, 'name', 'id', _vscp_priority)
         if not isinstance(result, int):
             result = _vscp_priority[-1]['id']
@@ -30,6 +62,15 @@ class Dictionary:
 
 
     def priority_name(self, var: int) -> str:
+        """
+        Retrieves the name for a given priority ID.
+
+        Args:
+            var (int): The priority ID.
+
+        Returns:
+            str: The priority name, or 'UNKNOWN' if not found.
+        """
         result = search(var, 'id', 'name', _vscp_priority)
         if not isinstance(result, str):
             result = str(UNKNOWN_NAME)
@@ -37,6 +78,15 @@ class Dictionary:
 
 
     def class_name(self, var: int) -> str:
+        """
+        Retrieves the name for a given VSCP Class ID.
+
+        Args:
+            var (int): The VSCP Class ID.
+
+        Returns:
+            str: The class name, or 'UNKNOWN' if not found.
+        """
         result = search(var, 'id', 'class', self.get())
         if not isinstance(result, str):
             result = str(UNKNOWN_NAME)
@@ -44,6 +94,15 @@ class Dictionary:
 
 
     def class_id(self, name: str) -> int:
+        """
+        Retrieves the ID for a given VSCP Class name.
+
+        Args:
+            name (str): The VSCP Class name.
+
+        Returns:
+            int: The class ID, or UNKNOWN_VALUE if not found.
+        """
         result = search(name, 'class', 'id', self.get())
         if not isinstance(result, int):
             result = int(UNKNOWN_VALUE)
@@ -51,6 +110,16 @@ class Dictionary:
 
 
     def type_name(self, class_id: int, type_id: int) -> str:
+        """
+        Retrieves the name for a given VSCP Type ID within a specific Class.
+
+        Args:
+            class_id (int): The VSCP Class ID.
+            type_id (int): The VSCP Type ID.
+
+        Returns:
+            str: The type name, or 'UNKNOWN' if not found.
+        """
         result = search(type_id, 'id', 'type', self.class_types(class_id))
         if not isinstance(result, str):
             result = str(UNKNOWN_NAME)
@@ -58,6 +127,16 @@ class Dictionary:
 
 
     def type_id(self, class_, type_: str) -> int:
+        """
+        Retrieves the ID for a given VSCP Type name within a specific Class.
+
+        Args:
+            class_ (int or str): The VSCP Class ID or Class Name.
+            type_ (str): The VSCP Type name.
+
+        Returns:
+            int: The type ID, or UNKNOWN_VALUE if not found.
+        """
         result = None
         if isinstance(class_, (int, str)):
             result = search(type_, 'type', 'id', self.class_types(class_))
@@ -68,6 +147,17 @@ class Dictionary:
 
     @singledispatchmethod
     def class_types(self, _var) -> list:
+        """
+        Retrieves the list of types defined for a given VSCP Class.
+
+        This method is overloaded to accept either a class ID (int) or class Name (str).
+
+        Args:
+            _var: The Class ID (int) or Class Name (str).
+
+        Returns:
+            list: A list of type definitions.
+        """
         return []
 
 
@@ -82,6 +172,20 @@ class Dictionary:
 
 
     def parse_data(self, class_id: int, type_id: int, data: list) -> list:
+        """
+        Parses raw VSCP data bytes into human-readable descriptions and values.
+
+        Uses the dictionary definitions to interpret the data payload based on
+        the Class and Type.
+
+        Args:
+            class_id (int): The VSCP Class ID.
+            type_id (int): The VSCP Type ID.
+            data (list): The raw data bytes.
+
+        Returns:
+            list: A list of [description, value] pairs strings.
+        """
         data_descr = self._get_data_description(class_id, type_id)
         description = data_descr['str'] if 'str' in data_descr else ''
         units = data_descr['uni'] if 'uni' in data_descr else {}
@@ -100,6 +204,9 @@ class Dictionary:
 
 
     def _get_data_description(self, class_id: int, type_id: int) -> dict:
+        """
+        Helper to fetch the 'descr' dictionary for a specific class/type.
+        """
         result = search(type_id, 'id', 'descr', self.class_types(class_id))
         if not isinstance(result, dict):
             result = {}
@@ -107,6 +214,7 @@ class Dictionary:
 
 
     def _convert_bits(self, data: list, _) -> str:
+        """Converts data to a binary string representation."""
         result = ''
         for idx, val in enumerate(data):
             result += f'{val:08b}'
@@ -115,6 +223,7 @@ class Dictionary:
 
 
     def _convert_int(self, data: list, _) -> str:
+        """Converts data to a signed integer string."""
         try:
             val = int.from_bytes(data, 'big', signed=True)
         except ValueError:
@@ -123,6 +232,7 @@ class Dictionary:
 
 
     def _convert_uint(self, data: list, _) -> str:
+        """Converts data to an unsigned integer string."""
         try:
             val = int.from_bytes(data, 'big', signed=False)
         except ValueError:
@@ -131,6 +241,7 @@ class Dictionary:
 
 
     def _convert_ruint(self, data: list, _) -> str:
+        """Converts data to a restricted unsigned integer (0 mapped to 256)."""
         try:
             val = int.from_bytes(data, 'big', signed=False) & 0xFF
             if 0 == val:
@@ -142,6 +253,7 @@ class Dictionary:
 
 
     def _convert_hexint(self, data: list, _) -> str:
+        """Converts data to a hexadecimal string."""
         try:
             val = int.from_bytes(data, 'big', signed=False)
         except ValueError:
@@ -151,6 +263,7 @@ class Dictionary:
 
 
     def _convert_combined_ints(self, data: list, _) -> str:
+        """Provides Hex, Int, and UInt representations combined."""
         indent = os.linesep + (' ' * MULTILINE_INDENT)
         result_hex  =          f'{"HEX":<6}'  + self._convert_hexint(data, _)
         result_int  = indent + f'{"int":<6}'  + self._convert_int(data, _)
@@ -159,6 +272,7 @@ class Dictionary:
 
 
     def _convert_normalizedint(self, data: list, _) -> str:
+        """Converts VSCP normalized integer format to string."""
         result = ''
         if 1 < len(data):
             try:
@@ -173,6 +287,7 @@ class Dictionary:
 
 
     def _convert_float(self, data: list, _) -> str:
+        """Converts data to float string."""
         data.reverse()
         try:
             val = memoryview(bytearray(data)).cast('f')[0]
@@ -182,6 +297,7 @@ class Dictionary:
 
 
     def _convert_double(self, data: list, _) -> str:
+        """Converts data to double precision float string."""
         data.reverse()
         try:
             val = memoryview(bytearray(data)).cast('d')[0]
@@ -191,6 +307,7 @@ class Dictionary:
 
 
     def _convert_dtime0(self, data: list, _) -> str:
+        """Converts timestamp to datetime string."""
         try:
             val = int.from_bytes(data, 'big', signed=False) & 0x00000000FFFFFFFF
         except ValueError:
@@ -199,6 +316,7 @@ class Dictionary:
 
 
     def _convert_dtime1(self, data: list, _) -> str:
+        """Converts VSCP compressed datetime to string."""
         try:
             val = int.from_bytes(data, 'big') & 0x0000003FFFFFFFFF
             year   = val >> 26 & 0x0FFF
@@ -214,6 +332,7 @@ class Dictionary:
 
 
     def _convert_dtime2(self, data: list, _) -> str:
+        """Converts 7-byte datetime array to string."""
         result = '0000-00-00 00:00:00'
         if 7 == len(data):
             try:
@@ -230,6 +349,7 @@ class Dictionary:
 
 
     def _convert_date_ymd(self, data: list, _) -> str:
+        """Converts 4-byte date array (YYYYMMDD) to string."""
         result = '0000-00-00'
         if 4 == len(data):
             try:
@@ -243,6 +363,7 @@ class Dictionary:
 
 
     def _convert_time_hms(self, data: list, _) -> str:
+        """Converts time array to HH:MM:SS string."""
         if 6 != len(data):
             result = '00:00:00'
         else:
@@ -255,6 +376,7 @@ class Dictionary:
 
 
     def _convert_time_hms_ms(self, data: list, _) -> str:
+        """Converts time array to HH:MM:SS.ms string."""
         result = '00:00:00.000'
         if 5 == len(data):
             try:
@@ -269,6 +391,7 @@ class Dictionary:
 
 
     def _convert_weekday(self, data: list, _) -> str:
+        """Converts weekday index to name."""
         results = {
             0: 'Monday',
             1: 'Tuesday',
@@ -286,6 +409,7 @@ class Dictionary:
 
 
     def _convert_flags0(self, data: list, _) -> str:
+        """Converts flags byte to descriptive string (Reset/Storage/Idle)."""
         try:
             val = int.from_bytes(data, 'big', signed=False)
         except ValueError:
@@ -312,6 +436,7 @@ class Dictionary:
 
 
     def _convert_flags1(self, data: list, _) -> str:
+        """Converts capability flags to descriptive string."""
         try:
             val = int.from_bytes(data, 'big', signed=False)
         except ValueError:
@@ -348,6 +473,7 @@ class Dictionary:
 
 
     def convert_blalgo(self, data: list, _) -> str:
+        """Converts bootloader algorithm code to name."""
         results = {
             0x00:   'VSCP algorithm',
             0x01:   'Microchip PIC algorithm',
@@ -368,6 +494,7 @@ class Dictionary:
 
 
     def _convert_memtyp(self, data: list, _) -> str:
+        """Converts memory type code to description."""
         results = {
             0x01:   'DATA (EEPROM, MRAM, FRAM)',
             0x02:   'CONFIG (CPU configuration)',
@@ -387,6 +514,7 @@ class Dictionary:
 
 
     def _convert_dimtype(self, data: list, _) -> str:
+        """Converts dimming value to description."""
         try:
             val = int(data[0])
         except ValueError:
@@ -407,6 +535,7 @@ class Dictionary:
 
 
     def _convert_repeattype(self, data: list, _) -> str:
+        """Converts repeat type value to description."""
         try:
             val = int(data[0])
         except ValueError:
@@ -421,6 +550,7 @@ class Dictionary:
 
 
     def _convert_evbutton(self, data: list, _) -> str:
+        """Converts button event flags to string."""
         result = ''
         try:
             val = int(data) & 0xFF
@@ -438,6 +568,7 @@ class Dictionary:
 
 
     def _convert_evtoken(self, data: list, _) -> str:
+        """Converts token event data to description."""
         event_codes = {
             0:  'Touched-released',
             1:  'Touched',
@@ -480,6 +611,7 @@ class Dictionary:
 
 
     def _convert_onoffstate(self, data: list, _) -> str:
+        """Converts On/Off state byte to string."""
         result = ''
         if 1 == len(data):
             result = 'ON' if 0 != data[0] else 'OFF'
@@ -487,6 +619,7 @@ class Dictionary:
 
 
     def _convert_ledaction(self, data: list, _) -> str:
+        """Converts LED action code to string."""
         try:
             results = {
                 0:  'OFF',
@@ -501,6 +634,7 @@ class Dictionary:
 
 
     def _convert_playbackfunction(self, data: list, _) -> str:
+        """Converts playback function code to description."""
         try:
             results = {
                 0:  'Stop',
@@ -529,6 +663,7 @@ class Dictionary:
 
 
     def _convert_navigationfunction(self, data: list, _) -> str:
+        """Converts navigation key code to description."""
         try:
             results = {
                 10: '+10',
@@ -553,6 +688,7 @@ class Dictionary:
 
 
     def _convert_screenformat(self, data: list, _) -> str:
+        """Converts screen format code to description."""
         try:
             results = {
                 0:  'Auto',
@@ -568,6 +704,7 @@ class Dictionary:
 
 
     def _convert_devicecode_input(self, data: list, _) -> str:
+        """Converts input device code to description."""
         try:
             val = int(data[0])
         except ValueError:
@@ -602,6 +739,7 @@ class Dictionary:
 
 
     def _convert_devicecode_output(self, data: list, _) -> str:
+        """Converts output device code to description."""
         try:
             val = int(data[0])
         except ValueError:
@@ -623,6 +761,7 @@ class Dictionary:
 
 
     def _convert_recording_control(self, data: list, _) -> str:
+        """Converts recording control code to description."""
         try:
             results = {
                 0:  'Start recording',
@@ -638,6 +777,7 @@ class Dictionary:
 
 
     def _convert_tivocode(self, data: list, _) -> str:
+        """Converts TiVo code to description."""
         try:
             results = {
                 1:  'Box Office',
@@ -662,6 +802,7 @@ class Dictionary:
 
 
     def _convert_media_information(self, data: list, _) -> str:
+        """Converts media info request code to description."""
         try:
             results = {
                 0:  'Current Title',
@@ -681,6 +822,7 @@ class Dictionary:
 
 
     def _convert_multimedia_control(self, data: list, _) -> str:
+        """Converts multimedia control code to description."""
         try:
             results = {
                 0:  'Active Title',
@@ -736,6 +878,7 @@ class Dictionary:
 
 
     def _convert_securevent(self, data: list, _) -> str:
+        """Converts security event code to description."""
         result = 'Unknown'
         if 0 < len(data):
             results = {
@@ -748,6 +891,7 @@ class Dictionary:
 
 
     def _convert_id_check_bits(self, data: list, _) -> str:
+        """Converts ID check bits to description."""
         try:
             val = int(data[0])
             result = self._convert_bits(data, _)
@@ -771,6 +915,7 @@ class Dictionary:
 
 
     def _convert_config_status(self, data: list, _) -> str:
+        """Converts config status byte to description."""
         result = ''
         try:
             val = int(data[0])
@@ -782,6 +927,7 @@ class Dictionary:
 
 
     def _convert_timeunit(self, data: list, _) -> str:
+        """Converts time unit code to string."""
         results = {
             0:  'Time in microseconds',
             1:  'Time in milliseconds',
@@ -799,6 +945,7 @@ class Dictionary:
 
 
     def _convert_langcoding(self, data: list, _) -> str:
+        """Converts language coding byte to description."""
         results = {
             0:  'Custom coded system',
             1:  'ISO 639-1',
@@ -816,6 +963,7 @@ class Dictionary:
 
 
     def _convert_pulsetypecoding(self, data: list, _) -> str:
+        """Converts pulse type coding to description."""
         try:
             val = int(data[0])
             result = self._convert_timeunit(data, _)
@@ -839,6 +987,16 @@ class Dictionary:
 
 
     def _convert_measurecoding(self, data: list, units: dict) -> dict:
+        """
+        Parses the measurement coding byte.
+
+        Args:
+            data (list): Data bytes (coding byte is at index 0).
+            units (dict): Dictionary of units for the measurement type.
+
+        Returns:
+            dict: parsed coding details (dataType, unit, sensorIndex).
+        """
         result = {'dataType':       'raw',
                   'unit':           '',
                   'sensorIndex':    0}
@@ -870,6 +1028,7 @@ class Dictionary:
 
 
     def _convert_measurement_data(self, data: list, units: dict) -> str:
+        """Converts general measurement data."""
         result = 'CONVERSION ERROR'
         if 1 < len(data):
             coding = self._convert_measurecoding([data[0]], units)
@@ -883,6 +1042,7 @@ class Dictionary:
 
 
     def _convert_measurement_zoned_data(self, data: list, units: dict) -> str:
+        """Converts zoned measurement data (assumes normalized int)."""
         result = 'CONVERSION ERROR'
         if 5 <= len(data):
             coding = self._convert_measurecoding([0x80], units) # coding: normalized int; unit: default
@@ -895,6 +1055,7 @@ class Dictionary:
 
 
     def _convert_measurement_32_data(self, data: list, units: dict) -> str:
+        """Converts 32-bit float measurement data."""
         result = 'CONVERSION ERROR'
         if 4 <= len(data):
             coding = self._convert_measurecoding([0xA0], units) # coding: float; unit: default
@@ -907,6 +1068,7 @@ class Dictionary:
 
 
     def _convert_measurement_64_data(self, data: list, units: dict) -> str:
+        """Converts 64-bit double measurement data."""
         result = 'CONVERSION ERROR'
         if 8 == len(data):
             coding = self._convert_measurecoding([0xC0], units) # coding: double; unit: default
@@ -919,6 +1081,7 @@ class Dictionary:
 
 
     def _convert_measureindex(self, data: list, _) -> str:
+        """Converts measurement index to string."""
         try:
             val = int(data[0])
         except ValueError:
@@ -933,6 +1096,7 @@ class Dictionary:
 
 
     def _convert_sensorindex(self, data: list, _) -> str:
+        """Converts sensor index to string."""
         try:
             val = int(data[0])
         except ValueError:
@@ -947,6 +1111,7 @@ class Dictionary:
 
 
     def _convert_changecode(self, data: list, _) -> str:
+        """Converts change code (up/down/value) to description."""
         try:
             val = int(data[0], )
         except ValueError:
@@ -965,6 +1130,7 @@ class Dictionary:
 
 
     def _convert_coord(self, data: list, _) -> str:
+        """Converts coordinate type byte to description."""
         result = ''
         if 1 == len(data):
             result = 'absolute' if 0 != data[0] else 'relative'
@@ -972,6 +1138,7 @@ class Dictionary:
 
 
     def _convert_loglevel(self, data: list, _) -> str:
+        """Converts log level byte to name."""
         result = 'Unknown'
         if 0 < len(data):
             results = {
@@ -990,26 +1157,41 @@ class Dictionary:
 
 
     def _convert_ipv4(self, data: list, _) -> str:
+        """Converts 4 bytes to IPv4 address string."""
         result = 'None' if 4 != len(data) else '.'.join(f'{(val & 0xFF):d}' for val in data)
         return result
 
 
     def _convert_raw(self, data: list, _) -> str:
+        """Converts raw data to hex string sequence."""
         result = ' '.join(f'0x{val:02X}' for val in data) if 0 != len(data) else ''
         return result
 
 
     def _convert_ascii(self, data: list, _) -> str:
+        """Converts data to ASCII string."""
         result = ''.join([chr(val) for val in data]) if 0 != len(data) else ''
         return result
 
 
     def _convert_utf8(self, data: list, _) -> str:
+        """Converts data to UTF-8 string."""
         result = bytes(data).decode('utf-8') if 0 != len(data) else ''
         return result
 
 
     def _convert(self, data_type: str, data: list, units: dict) -> str:
+        """
+        Dispatches conversion to specific method based on data_type string.
+
+        Args:
+            data_type (str): The type string (e.g., 'int', 'float').
+            data (list): The raw data.
+            units (dict): Optional units dictionary.
+
+        Returns:
+            str: The converted string representation.
+        """
         func_map = {'bits':     self._convert_bits,
                     'int':      self._convert_int,
                     'uint':     self._convert_uint,
@@ -1071,6 +1253,19 @@ class Dictionary:
 
 
 def modify_dictionary(input_defs: list, option: str) -> list:
+    """
+    Creates a modified copy of dictionary definitions.
+
+    Useful for generating variations of types (e.g., adding zone information
+    or changing number formats).
+
+    Args:
+        input_defs (list): The original list of type definitions.
+        option (str): The modification to apply ('addZone', 'float', 'double').
+
+    Returns:
+        list: The modified list of type definitions.
+    """
     options = { 'none':    {'type_from':   '',
                             'type_to':     '',
                             'dlc_ins':     {}},

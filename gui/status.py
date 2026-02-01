@@ -1,5 +1,10 @@
+"""
+Status bar module.
+
+Manages the bottom status bar, including the progress bar, PHY interface connection
+controls, and status indicators.
+"""
 # pylint: disable=line-too-long, too-many-ancestors, too-many-instance-attributes
-# pylint: disable=missing-module-docstring, missing-class-docstring, missing-function-docstring
 
 import os
 import tkinter as tk
@@ -12,7 +17,20 @@ from .common import call_set_scan_widget_state
 from .popup import CTkFloatingWindow
 
 class StatusFrame(ctk.CTkFrame): # pylint: disable=too-few-public-methods
+    """
+    Frame representing the application status bar.
+
+    Contains controls for connecting/disconnecting hardware interfaces and displays
+    scan progress.
+    """
+
     def __init__(self, parent):
+        """
+        Initialize the StatusFrame.
+
+        Args:
+            parent: The parent widget associated with this frame.
+        """
         super().__init__(parent)
 
         elements_fg_color = parent._apply_appearance_mode(ctk.ThemeManager.theme['CTkFrame']['fg_color'])
@@ -74,16 +92,24 @@ class StatusFrame(ctk.CTkFrame): # pylint: disable=too-few-public-methods
 
 
     def _phy_channels_configure(self):
+        """Update the channel combo box based on the selected interface."""
         self.phy_channel.configure(values=phy.driver.channels.keys())
         self.phy_channel.set(phy.driver.channel)
 
 
     def _phy_interface_selected(self, value):
+        """
+        Callback when a PHY interface is selected.
+
+        Args:
+            value: The name of the selected interface.
+        """
         phy.driver.find_interface_channels(phy.driver.interfaces[value])
         self._phy_channels_configure()
 
 
     def _phy_search_interfaces(self):
+        """Scan for available hardware interfaces."""
         phy.driver.find_interfaces()
         if phy.driver.interfaces:
             self.phy_interface.configure(values=phy.driver.interfaces)
@@ -93,6 +119,7 @@ class StatusFrame(ctk.CTkFrame): # pylint: disable=too-few-public-methods
 
 
     def _phy_connect_switch(self):
+        """Toggle the connection state (Connect/Disconnect) for the selected interface."""
         if self.phy_connect_is_on:
             phy.driver.shutdown()
             img = self.img_off
@@ -115,6 +142,12 @@ class StatusFrame(ctk.CTkFrame): # pylint: disable=too-few-public-methods
 
 
     def _phy_iface_state(self, state: str):
+        """
+        Set the state of interface selection widgets.
+
+        Args:
+            state: 'enable' or 'disabled'.
+        """
         _state = 'readonly' if 'enable' == state.lower() else 'disabled'
         self.phy_bitrate.configure(state=_state)
         self.phy_channel.configure(state=_state)
@@ -122,6 +155,13 @@ class StatusFrame(ctk.CTkFrame): # pylint: disable=too-few-public-methods
 
 
     def _show_search_menu(self, event, menu):
+        """
+        Show the interface search context menu.
+
+        Args:
+            event: Mouse event.
+            menu: The popup menu to show.
+        """
         try:
             if 'disabled' != self.phy_interface.cget('state'):
                 menu.popup(event.x_root, event.y_root)
@@ -130,4 +170,10 @@ class StatusFrame(ctk.CTkFrame): # pylint: disable=too-few-public-methods
 
 
     def update_progress(self, val):
+        """
+        Update the progress bar value.
+
+        Args:
+            val: Progress value (0.0 to 1.0).
+        """
         self.progress.set(val)

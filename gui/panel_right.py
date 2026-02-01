@@ -1,4 +1,9 @@
-# pylint: disable=missing-module-docstring, missing-class-docstring, missing-function-docstring
+"""
+Right panel module for the VSCP application.
+
+This module handles the right-side panel of the GUI, which primarily consists
+of the VSCP message logger (treeview) and the detailed event information display.
+"""
 # pylint: disable=line-too-long, too-many-ancestors
 
 
@@ -13,7 +18,21 @@ from .popup import CTkFloatingWindow
 
 
 class Messages(ctk.CTkFrame):
+    """
+    Widget displaying VSCP messages in a treeview.
+
+    Provides a log view of incoming/outgoing messages with columns for timestamp,
+    direction, node ID, priority, class, type, and data. Includes a context menu
+    for clearing items or saving the log to a CSV file.
+    """
+
     def __init__(self, parent):
+        """
+        Initialize the Messages widget.
+
+        Args:
+            parent: The parent widget associated with this frame.
+        """
         super().__init__(parent)
 
         header = [('', '', 0, 0, 'center', 'w'),
@@ -45,6 +64,12 @@ class Messages(ctk.CTkFrame):
 
 
     def _parse_msg_data(self, _):
+        """
+        Callback triggered when a treeview row is selected.
+
+        Extracts data from the selected row and sends it to the event info
+        handler for decoding and display.
+        """
         values = []
         selected_rows = self.messages.treeview.selection()
         if 1 == len(selected_rows):
@@ -53,10 +78,22 @@ class Messages(ctk.CTkFrame):
 
 
     def insert(self, row_data):
+        """
+        Insert new message rows into the treeview.
+
+        Args:
+            row_data: A list of values representing the message data to display.
+        """
         self.messages.insert_items(row_data)
 
 
     def item_deselect(self, event):
+        """
+        Handle double-click events to deselect a row.
+
+        Args:
+            event: The mouse event triggering the action.
+        """
         selected_rows = self.messages.treeview.selection()
         row_clicked = self.messages.treeview.identify('row', event.x, event.y)
         index = selected_rows.index(row_clicked) if row_clicked in selected_rows else -1
@@ -65,16 +102,21 @@ class Messages(ctk.CTkFrame):
 
 
     def _clear_all_items(self):
+        """Clear all messages from the log."""
         self.messages.treeview.delete(*self.messages.treeview.get_children())
 
 
     def _clear_selected_items(self):
+        """Delete only the currently selected messages from the log."""
         selected_rows = self.messages.treeview.selection()
         for row in selected_rows:
             self.messages.treeview.delete(row)
 
 
     def _save_log(self):
+        """
+        Open a save file dialog and export the current log to a CSV file.
+        """
         filetypes = [('CSV Log File', '*.csv')]
         fname = ctk.filedialog.asksaveasfilename(confirmoverwrite=True, initialfile='vscp_log',
                                                  filetypes=filetypes, defaultextension=filetypes)
@@ -89,6 +131,16 @@ class Messages(ctk.CTkFrame):
 
 
     def _show_menu(self, event, menu):
+        """
+        Display the context menu (Clear/Save) at the mouse position.
+
+        Enables or disables menu items based on whether there are items
+        in the list or items selected.
+
+        Args:
+            event: The mouse event.
+            menu: The menu widget to display.
+        """
         try:
             state = 'normal' if 0 != len(self.messages.treeview.get_children()) else 'disabled'
             self.dropdown_bt_clear_all.configure(state=state)
@@ -101,7 +153,20 @@ class Messages(ctk.CTkFrame):
 
 
 class EventInfo(ctk.CTkFrame): # pylint: disable=too-few-public-methods
+    """
+    Widget for displaying detailed information about a selected VSCP event.
+
+    It parses raw event data using the VSCP dictionary and displays it in a
+    text box.
+    """
+
     def __init__(self, parent):
+        """
+        Initialize the EventInfo widget.
+
+        Args:
+            parent: The parent widget associated with this frame.
+        """
         self.parent = parent
         super().__init__(self.parent)
 
@@ -113,6 +178,15 @@ class EventInfo(ctk.CTkFrame): # pylint: disable=too-few-public-methods
 
 
     def display(self, data: list) -> None:
+        """
+        Decode and display the provided event data.
+
+        Parses the Class, Type, and Data bytes to generate a human-readable
+        description of the event.
+
+        Args:
+            data: A list containing raw message fields (timestamp, dir, id, priority, class, type, data).
+        """
         self.event_info.configure(state='normal')
         self.event_info.delete('1.0', 'end')
         if 0 != len(data):
@@ -131,7 +205,19 @@ class EventInfo(ctk.CTkFrame): # pylint: disable=too-few-public-methods
 
 
 class RightPanel(ctk.CTkFrame): # pylint: disable=too-few-public-methods
+    """
+    Main container for the right panel of the application.
+
+    Holds the Messages widget (the log list) and the EventInfo widget (the detail view).
+    """
+
     def __init__(self, parent):
+        """
+        Initialize the RightPanel.
+
+        Args:
+            parent: The parent widget associated with this frame.
+        """
         self.parent = parent
         super().__init__(self.parent)
 

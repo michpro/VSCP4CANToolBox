@@ -1,10 +1,28 @@
-# pylint: disable=missing-module-docstring, missing-class-docstring, missing-function-docstring
+"""
+Application Menu Module.
+
+This module defines the main application menu bar using CTkMenuBar.
+It handles file and settings menu options and their associated commands,
+such as exiting the application.
+"""
 
 # import customtkinter as ctk
 from CTkMenuBar import CTkMenuBar, CustomDropdownMenu
 
-class Menu:
+class Menu: # pylint: disable=too-few-public-methods
+    """
+    Manages the main menu bar for the application.
+
+    Creates 'File' and 'Settings' menus with dropdown options.
+    """
+
     def __init__(self, parent):
+        """
+        Initializes the Menu instance.
+
+        Args:
+            parent: The parent widget (typically the main Application window).
+        """
         self.parent = parent
         menu = CTkMenuBar(parent)
         entry_file = menu.add_cascade("File")
@@ -24,4 +42,9 @@ class Menu:
 
 
     def exit_app(self):
+        """
+        Closes the application.
+
+        Destroys the parent window.
+        """
         self.parent.destroy()

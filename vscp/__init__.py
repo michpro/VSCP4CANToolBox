@@ -1,4 +1,9 @@
-# pylint: disable=missing-module-docstring
+"""
+VSCP Package Initialization.
+
+This module exposes the core VSCP functionalities including dictionary management,
+message handling, callbacks, MDF parsing, and various tools for node interaction.
+"""
 
 from vscp.dictionary import dictionary
 from vscp.message import Message

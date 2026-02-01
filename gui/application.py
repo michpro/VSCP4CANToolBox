@@ -1,4 +1,12 @@
-# pylint: disable=line-too-long, missing-module-docstring, missing-class-docstring, missing-function-docstring
+"""
+VSCP Toolbox Application Module.
+
+This module defines the main GUI application class based on customtkinter.
+It handles window initialization, layout configuration, loading resources
+(icons, fonts), and dispatching incoming VSCP messages to the UI components.
+"""
+
+# pylint: disable=line-too-long
 
 import os
 import ctypes
@@ -11,7 +19,20 @@ from .status import StatusFrame
 
 
 class Application(ctk.CTk): # pylint: disable=too-few-public-methods
+    """
+    Main application class for VSCP ToolBox.
+
+    Inherits from customtkinter.CTk and sets up the main window, styling,
+    and child components (Menu, AppFrame, StatusBar).
+    """
+
     def __init__(self):
+        """
+        Initializes the Application.
+
+        Sets up the window geometry, title, icons, fonts, and platform-specific
+        identifiers. Initializes the main UI components.
+        """
         super().__init__()
         self.width = 1552
         self.height = 700
@@ -38,6 +59,7 @@ class Application(ctk.CTk): # pylint: disable=too-few-public-methods
         self.geometry(f'{self.width}x{self.height}+{x}+{y}')
 
         self.minsize(width=self.width, height=self.height)
+        self.maxsize(width=self.width, height=self.winfo_screenheight() - 80)
         self.resizable(width=False, height=True)
 
         self.menu = Menu(self)
@@ -46,11 +68,32 @@ class Application(ctk.CTk): # pylint: disable=too-few-public-methods
 
 
     def message_dispatcher(self, msg) -> None:
+        """
+        Dispatches a received VSCP message to the UI.
+
+        Prepares the message data for display and inserts it into the message list view.
+
+        Args:
+            msg (dict): The VSCP message dictionary.
+        """
         self.app.right.messages.insert(self._prepare_data_to_show(msg))
-        # self.app.left.neighbourhood.scan_frame.check_node(msg['nickName'])
+        # self.app.left.neighbourhood.scan_frame.check_node(msg['nickName']) # TODO remove or implement
 
 
     def _prepare_data_to_show(self, msg) -> list:
+        """
+        Formats raw VSCP message data into a list suitable for the UI treeview.
+
+        Processes the message attributes (timestamp, direction, node ID, class/type names)
+        and parses detailed data payload descriptions if available.
+
+        Args:
+            msg (dict): The VSCP message dictionary.
+
+        Returns:
+            list: A list of dictionaries, where each dictionary contains 'values' (row columns)
+                  and 'tags' (styling information) for the UI component.
+        """
         node_id = f"0x{msg['nickName']:02X}"
         if msg['isHardCoded'] is True:
             node_id = '►' + node_id + '◄'

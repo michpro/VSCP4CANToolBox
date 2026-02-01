@@ -1,4 +1,13 @@
-# pylint: disable=line-too-long, missing-module-docstring, missing-class-docstring, missing-function-docstring
+"""
+Node Configuration Module.
+
+This module provides the `NodeConfiguration` class, which creates a separate window
+(Toplevel) for configuring a specific VSCP node. It allows viewing module information,
+register details in a treeview, and potentially modifying settings (currently primarily
+viewing capabilities implemented).
+"""
+
+# pylint: disable=line-too-long
 # pylint: disable=too-many-ancestors
 
 
@@ -10,6 +19,20 @@ from .treeview import CTkTreeview
 
 
 def new_tag_config(self, tagName, **kwargs): # pylint: disable=invalid-name
+    """
+    Workaround wrapper for the internal Textbox tag_config method.
+
+    Allows configuring tags in CTkTextbox, bypassing some limitations or
+    parameter handling in customtkinter's wrapper.
+
+    Args:
+        self: The CTkTextbox instance.
+        tagName (str): The name of the tag.
+        **kwargs: Configuration options for the tag.
+
+    Returns:
+        The result of the underlying Tkinter text widget's tag_config call.
+    """
     return self._textbox.tag_config(tagName, **kwargs) # pylint: disable=protected-access
 
 
@@ -18,7 +41,26 @@ ctk.CTkTextbox.tag_config = new_tag_config
 
 
 class NodeConfiguration: # pylint: disable=too-many-instance-attributes, too-few-public-methods
+    """
+    Manages the Node Configuration window.
+
+    Displays a Toplevel window showing registers for a specific node ID and GUID.
+    Includes an info panel with module details and a tabbed configuration panel
+    (currently focused on registers).
+    """
+
     def __init__(self, parent, node_id: int, guid: str):
+        """
+        Initializes the NodeConfiguration window.
+
+        Sets up the window layout, panels (ConfigPanel, InfoPanel), and window
+        properties like geometry and title. Loads module info using VSCP MDF utilities.
+
+        Args:
+            parent: The parent widget (Application instance).
+            node_id (int): The nickname ID of the node to configure.
+            guid (str): The GUID of the node as a string.
+        """
         super().__init__()
         self.window = ctk.CTkToplevel(parent)
         self.width = 1050
@@ -35,9 +77,11 @@ class NodeConfiguration: # pylint: disable=too-many-instance-attributes, too-few
         self.window.title(f'VSCP ToolBox - Node 0x{self.node_id:02X} GUID: {guid} Configuration')
         self.window.geometry(f'{self.width}x{self.height}+{x}+{y}')
         self.window.minsize(width=self.width, height=self.height)
+        self.window.maxsize(width=self.width, height=self.window.winfo_screenheight() - 80)
         self.window.resizable(width=False, height=True)
         self.window.protocol('WM_DELETE_WINDOW', self._window_exit)
         self.window.after(250, lambda: self.window.iconbitmap(icon_path)) # show icon workaround
+        self.window.bind("<Configure>", lambda e: self._check_maximize())
 
         self.config_panel = ctk.CTkFrame(self.window, corner_radius=0)
         self.config_panel.pack(fill='both', expand=True)
@@ -52,17 +96,52 @@ class NodeConfiguration: # pylint: disable=too-many-instance-attributes, too-few
 
 
     def bring_to_front(self):
+        """
+        Brings the configuration window to the front.
+
+        Temporarily sets the 'topmost' attribute to force the window above others,
+        then releases it. Used when re-opening an already existing config window.
+        """
         self.window.attributes('-topmost', True)
         self.window.focus_force()
         self.window.after(800, lambda: self.window.attributes('-topmost', False))
 
 
+    def _check_maximize(self):
+        """
+        Prevents the window from being maximized (zoomed).
+
+        If the user attempts to maximize the window, this method forces it back
+        to the 'normal' state to maintain the fixed layout dimensions.
+        """
+        if self.window.state() == 'zoomed':
+            self.window.state('normal')
+
+
     def _window_exit(self):
+        """
+        Handles the window close event.
+
+        Notifies the parent application to perform cleanup before closing.
+        """
         self.parent.close_node_configuration()
 
 
 class InfoPanel(ctk.CTkFrame):
+    """
+    Displays module information at the bottom of the config window.
+
+    Shows details like Name, Model, Version, VSCP Level, etc., extracted from
+    the Module Description File (MDF).
+    """
+
     def __init__(self, parent):
+        """
+        Initializes the InfoPanel.
+
+        Args:
+            parent: The parent widget.
+        """
         self.parent = parent
         super().__init__(self.parent)
 
@@ -76,6 +155,15 @@ class InfoPanel(ctk.CTkFrame):
 
 
     def display(self, data: dict) -> None:
+        """
+        Populates the text box with formatted module information.
+
+        Iterates through defined keys, retrieving values from the provided data
+        dictionary and inserting them into the text widget with styling.
+
+        Args:
+            data (dict): Dictionary containing module information.
+        """
         self.module_info.configure(state='normal')
         self.module_info.delete('1.0', 'end')
         if 0 != len(data):
@@ -107,7 +195,23 @@ class InfoPanel(ctk.CTkFrame):
 
 
 class ConfigPanel(ctk.CTkFrame):
+    """
+    Main configuration panel containing tabs for different settings categories.
+
+    Manages tabs like 'Registers', 'Remote Variables', 'Decision Matrix', etc.
+    Currently, only the 'Registers' tab is fully initialized.
+    """
+
     def __init__(self, parent):
+        """
+        Initializes the ConfigPanel.
+
+        Sets up the Tabview and creates the RegisterTab. Adds placeholders for
+        unimplemented tabs.
+
+        Args:
+            parent: The parent widget.
+        """
         super().__init__(parent)
 
         self.widget = ctk.CTkTabview(parent)
@@ -127,7 +231,23 @@ class ConfigPanel(ctk.CTkFrame):
 
 
 class RegistersTab(ctk.CTkFrame):
+    """
+    Tab for viewing and editing VSCP registers.
+
+    Displays register data in a treeview and shows detailed information about
+    the selected register in a side panel.
+    """
+
     def __init__(self, parent):
+        """
+        Initializes the RegistersTab.
+
+        Sets up the treeview columns and layout. Loads register definitions
+        from the VSCP MDF.
+
+        Args:
+            parent: The parent widget (tab).
+        """
         self.parent = parent
         self.registers = {}
         super().__init__(self.parent)
@@ -163,6 +283,13 @@ class RegistersTab(ctk.CTkFrame):
 
 
     def _insert_registers_data(self):
+        """
+        Populates the register treeview with data.
+
+        Iterates through the register data structure (organized by page and register address)
+        and inserts rows into the treeview. Displays address, access rights,
+        current value, sync status, and name.
+        """
         result = []
         for page, registers in self.registers_data.items():
             child = []

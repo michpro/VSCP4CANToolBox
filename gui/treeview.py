@@ -1,4 +1,9 @@
-# pylint: disable=missing-module-docstring, missing-class-docstring, missing-function-docstring
+"""
+Custom Treeview module.
+
+Provides a wrapper around the Tkinter Treeview widget with custom styling and
+CustomTkinter integration (scrollbars).
+"""
 # pylint: disable=line-too-long, too-many-ancestors, too-many-instance-attributes
 
 import os
@@ -29,7 +34,21 @@ ICON_PATH = os.path.join(ICON_DIR, 'arrow.png')
 # }
 
 class CTkTreeview(ctk.CTkFrame):
+    """
+    Custom Treeview widget with integrated scrollbars and custom styles.
+    """
+
     def __init__(self, master: any, header=None, items=[], xscroll=True, yscroll=True): # pylint: disable=dangerous-default-value, too-many-arguments
+        """
+        Initialize the CTkTreeview.
+
+        Args:
+            master: The parent widget.
+            header: List of tuples defining columns (id, text, width, minwidth, anchor, cell_anchor).
+            items: Initial list of items to insert.
+            xscroll: Boolean to enable horizontal scrollbar.
+            yscroll: Boolean to enable vertical scrollbar.
+        """
         self.parent = master
         self.header = header
         self.items = items
@@ -106,6 +125,15 @@ class CTkTreeview(ctk.CTkFrame):
 
 
     def _get_header_keys(self, items):
+        """
+        Extract column keys from the header definition.
+
+        Args:
+            items: Header definition list.
+
+        Returns:
+            list: List of column keys or None.
+        """
         result = None
         if isinstance(items, list) and len(items) > 1:
             result = []
@@ -117,6 +145,13 @@ class CTkTreeview(ctk.CTkFrame):
 
 
     def insert_items(self, items, parent=''):
+        """
+        Recursive method to insert items into the treeview.
+
+        Args:
+            items: List of dictionaries representing rows and children.
+            parent: The parent item ID (default is root).
+        """
         for item in items:
             if isinstance(item, dict):
                 text = item['text'] if 'text' in item else ''
@@ -128,10 +163,12 @@ class CTkTreeview(ctk.CTkFrame):
 
 
     def delete_all_items(self):
+        """Remove all items from the treeview."""
         self.treeview.delete(*self.treeview.get_children())
 
 
     def delete_selected_items(self):
+        """Remove currently selected items from the treeview."""
         selected_rows = self.treeview.selection()
         for row in selected_rows:
             self.treeview.delete(row)

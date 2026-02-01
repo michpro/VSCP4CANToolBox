@@ -1,4 +1,13 @@
-# pylint: disable=line-too-long, missing-module-docstring, missing-function-docstring
+"""
+VSCP Tools Module.
+
+This module provides high-level utilities for interacting with VSCP nodes.
+It includes functionality for scanning the bus, managing node lists,
+reading/writing registers (Extended Page Protocol), broadcasting time,
+and performing firmware updates over CAN.
+"""
+
+# pylint: disable=line-too-long
 
 
 import time
@@ -32,49 +41,123 @@ _scan_progress_observers: list = []
 
 
 def is_async_work() -> bool:
+    """
+    Checks if an asynchronous operation (scan, update, etc.) is currently in progress.
+
+    Returns:
+        bool: True if busy, False otherwise.
+    """
     return _async_work
 
 
 def add_scan_progress_observer(observer) -> None:
+    """
+    Registers a callback function to observe scan or operation progress.
+
+    Args:
+        observer (callable): A function that accepts a float (0.0 to 1.0).
+    """
     if callable(observer):
         _scan_progress_observers.append(observer)
 
 
 def _update_scan_progress(progress_val) -> None:
+    """
+    Notifies all registered observers of the current progress.
+
+    Args:
+        progress_val (float): Progress value between 0.0 and 1.0.
+    """
     for observer in _scan_progress_observers:
         observer(progress_val)
 
 
 def guid_str(guid: list) -> str:
+    """
+    Converts a GUID list of integers to a colon-separated string.
+
+    Args:
+        guid (list): List of 16 byte values.
+
+    Returns:
+        str: String representation (e.g., "FF:00:...")
+    """
     return ":".join(f"{val:02X}" for val in guid)
 
 
 def set_this_node_nickname(nickname: int):
+    """
+    Sets the nickname for the host/controller node.
+
+    Args:
+        nickname (int): The nickname ID (0-254).
+    """
     global _this_nickname # pylint: disable=global-statement
     _this_nickname = max(min(254, nickname), 0)
 
 
 def get_this_node_nickname() -> int:
+    """
+    Gets the current nickname of the host/controller node.
+
+    Returns:
+        int: The nickname ID.
+    """
     return _this_nickname
 
 
 def is_node_on_list(nickname: int) -> bool:
+    """
+    Checks if a node with the given nickname exists in the internal node list.
+
+    Args:
+        nickname (int): The nickname to check.
+
+    Returns:
+        bool: True if found, False otherwise.
+    """
     return not search(nickname, 'id', 'id', _nodes) is None
 
 
 def append_node(node: dict) -> None:
+    """
+    Adds a node dictionary to the internal node list.
+
+    Args:
+        node (dict): The node information.
+    """
     _nodes.append(node)
 
 
 def get_nodes() -> list:
+    """
+    Retrieves the list of discovered nodes.
+
+    Returns:
+        list: A list of node dictionaries.
+    """
     return _nodes
 
 
 def clear_nodes() -> None:
+    """
+    Clears the internal list of discovered nodes.
+    """
     _nodes.clear()
 
 
 async def probe_node(nickname: int):
+    """
+    Probes a specific nickname to check if a node is present.
+
+    Sends a NEW_NODE_ONLINE message and waits for a PROBE_ACK.
+
+    Args:
+        nickname (int): The nickname to probe.
+
+    Returns:
+        int or None: The confirmed nickname if found, otherwise None.
+    """
     global _async_work # pylint: disable=global-statement
     has_parent = _async_work
     if _async_work is False:
@@ -122,6 +205,18 @@ async def probe_node(nickname: int):
 
 
 async def get_node_info(nickname: int) -> dict: # pylint: disable=too-many-branches, too-many-locals
+    """
+    Retrieves detailed information (GUID, MDF) from a node.
+
+    Sends WHO_IS_THERE and collects multi-part responses.
+
+    Args:
+        nickname (int): The nickname of the target node.
+
+    Returns:
+        dict: A dictionary containing 'id', 'isHardCoded', 'guid', and 'mdf'.
+              Returns empty dict if retrieval fails.
+    """
     global _async_work # pylint: disable=global-statement
     has_parent = _async_work
     if _async_work is False:
@@ -190,6 +285,18 @@ async def get_node_info(nickname: int) -> dict: # pylint: disable=too-many-branc
 
 
 async def scan(min_node_id: int = 0, max_node_id: int = MAX_NICKNAME_ID) -> int:
+    """
+    Scans the bus for active nodes within a specified range.
+
+    Populates the internal node list with discovered devices.
+
+    Args:
+        min_node_id (int, optional): Start of range (inclusive). Defaults to 0.
+        max_node_id (int, optional): End of range (inclusive). Defaults to 254.
+
+    Returns:
+        int: The number of nodes found.
+    """
     global _async_work # pylint: disable=global-statement
     progress = 0.0
     _update_scan_progress(progress)
@@ -224,6 +331,9 @@ async def scan(min_node_id: int = 0, max_node_id: int = MAX_NICKNAME_ID) -> int:
 
 
 async def send_host_datetime():
+    """
+    Broadcasts the current host date and time to the VSCP bus.
+    """
     system_lag_fix_us = -5000
     global _async_work # pylint: disable=global-statement
     _update_scan_progress(0.0)
@@ -258,6 +368,16 @@ async def send_host_datetime():
 
 
 async def set_nickname(old_nickname: int, new_nickname: int) -> bool:
+    """
+    Attempts to change a node's nickname.
+
+    Args:
+        old_nickname (int): The current nickname of the target node.
+        new_nickname (int): The desired new nickname.
+
+    Returns:
+        bool: True if the NICKNAME_ACCEPTED response was received, False otherwise.
+    """
     global _async_work # pylint: disable=global-statement
     progress = 0.0
     _update_scan_progress(progress)
@@ -300,6 +420,18 @@ async def set_nickname(old_nickname: int, new_nickname: int) -> bool:
 
 
 async def extended_page_write_register(nickname: int, page: int, register_id: int, reg_vals: list) -> bool: # TODO add progress
+    """
+    Writes data to registers using the Extended Page Protocol.
+
+    Args:
+        nickname (int): The target node.
+        page (int): The register page (16-bit).
+        register_id (int): The starting register ID (8-bit).
+        reg_vals (list): A list of byte values to write.
+
+    Returns:
+        bool: True if the write was verified by response, False otherwise.
+    """
     global _async_work # pylint: disable=global-statement
     result = False
     if _async_work is False: # pylint: disable=too-many-nested-blocks
@@ -349,6 +481,18 @@ async def extended_page_write_register(nickname: int, page: int, register_id: in
 
 # TODO add progress
 async def extended_page_read_register(nickname: int, page: int, register_id: int, number_of_regs: int = None) -> list: # pylint: disable=too-many-branches
+    """
+    Reads data from registers using the Extended Page Protocol.
+
+    Args:
+        nickname (int): The target node.
+        page (int): The register page (16-bit).
+        register_id (int): The starting register ID (8-bit).
+        number_of_regs (int, optional): Number of registers to read. Defaults to reading until end of page.
+
+    Returns:
+        list: A list of bytes read from the registers, or None if failed.
+    """
     global _async_work # pylint: disable=global-statement
     has_parent = _async_work
     if _async_work is False:
@@ -413,6 +557,18 @@ async def extended_page_read_register(nickname: int, page: int, register_id: int
 
 
 async def _firmware_enter_bootloader_mode(nickname: int, bootloader_type: int) -> dict:
+    """
+    Commands a node to enter bootloader mode for firmware update.
+
+    Internal function used by `firmware_upload`.
+
+    Args:
+        nickname (int): The target node.
+        bootloader_type (int): Type of bootloader.
+
+    Returns:
+        dict: A tuple containing (flash_block_size, number_of_blocks) if successful, None otherwise.
+    """
     result = None
     try:
         credentials = await extended_page_read_register(nickname, 0x00, 0x92, 2)
@@ -464,6 +620,16 @@ async def _firmware_enter_bootloader_mode(nickname: int, bootloader_type: int) -
 
 
 async def _firmware_send_start_data_block(nickname: int, block_id: int) -> bool:
+    """
+    Initiates the transmission of a firmware data block.
+
+    Args:
+        nickname (int): The target node.
+        block_id (int): The index of the block.
+
+    Returns:
+        bool: True if acknowledged (ACK), False otherwise.
+    """
     result = False
     vscp_msg = {
         'class':        {'id': None,    'name': 'CLASS1.PROTOCOL'},
@@ -502,6 +668,17 @@ async def _firmware_send_start_data_block(nickname: int, block_id: int) -> bool:
 
 
 async def _firmware_send_data_chunk(nickname: int, chunk_gap: int, chunk: list) -> bool:
+    """
+    Sends a small chunk of firmware data (max 8 bytes).
+
+    Args:
+        nickname (int): The target node.
+        chunk_gap (int): Delay before sending.
+        chunk (list): Byte data to send.
+
+    Returns:
+        bool: True if acknowledged, False otherwise.
+    """
     result = False
     vscp_msg = {
         'class':        {'id': None,    'name': 'CLASS1.PROTOCOL'},
@@ -548,6 +725,19 @@ async def _firmware_send_data_chunk(nickname: int, chunk_gap: int, chunk: list) 
 
 
 async def _firmware_send_data_block(nickname: int, chunk_gap: int, block: list, progress: float, progress_chunk: float) -> bool: # pylint: disable=too-many-locals
+    """
+    Sends a full firmware block by splitting it into smaller chunks.
+
+    Args:
+        nickname (int): The target node.
+        chunk_gap (int): Delay between chunks.
+        block (list): The complete block data.
+        progress (float): Current base progress.
+        progress_chunk (float): Progress increment per chunk.
+
+    Returns:
+        bool: True if the entire block was successfully sent and verified, False otherwise.
+    """
     result = False
     block_crc = Calculator(Crc16.IBM_3740, True).checksum(bytes(block))
     chunks = int(len(block) / MAX_CAN_DLC)
@@ -592,6 +782,16 @@ async def _firmware_send_data_block(nickname: int, chunk_gap: int, block: list, 
 
 
 async def _firmware_send_program_data_block(nickname: int, block_id: int) -> bool:
+    """
+    Commands the node to program the recently received data block into flash.
+
+    Args:
+        nickname (int): The target node.
+        block_id (int): The ID of the block to program.
+
+    Returns:
+        bool: True if programming was acknowledged, False otherwise.
+    """
     result = False
     vscp_msg = {
         'class':        {'id': None,    'name': 'CLASS1.PROTOCOL'},
@@ -635,6 +835,16 @@ async def _firmware_send_program_data_block(nickname: int, block_id: int) -> boo
 
 
 async def _firmware_activate_new_image(nickname: int, firmware_crc: int) -> bool:
+    """
+    Commands the node to activate the newly uploaded firmware image.
+
+    Args:
+        nickname (int): The target node.
+        firmware_crc (int): The checksum of the entire firmware image.
+
+    Returns:
+        bool: True if activation was acknowledged, False otherwise.
+    """
     result = False
     vscp_msg = {
         'class':        {'id': None,    'name': 'CLASS1.PROTOCOL'},
@@ -680,6 +890,19 @@ async def _firmware_activate_new_image(nickname: int, firmware_crc: int) -> bool
 
 
 async def firmware_upload(nickname: int, firmware: list) -> bool: # pylint: disable=too-many-locals
+    """
+    Performs a complete firmware upload to a target node.
+
+    Handles entering bootloader mode, sending blocks, verification, programming,
+    and activation of the new image. Updates progress observers.
+
+    Args:
+        nickname (int): The target node ID.
+        firmware (list): The firmware binary data as a list of bytes.
+
+    Returns:
+        bool: True if the upload process completed successfully, False otherwise.
+    """
     global _async_work # pylint: disable=global-statement
     result = False
     progress = 0.0
