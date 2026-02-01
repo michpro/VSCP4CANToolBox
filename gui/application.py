@@ -4,9 +4,11 @@ VSCP Toolbox Application Module.
 This module defines the main GUI application class based on customtkinter.
 It handles window initialization, layout configuration, loading resources
 (icons, fonts), and dispatching incoming VSCP messages to the UI components.
-"""
 
-# pylint: disable=line-too-long
+@file application.py
+@copyright SPDX-FileCopyrightText: Copyright 2024-2026 by Michal Protasowicki
+@license SPDX-License-Identifier: MIT
+"""
 
 import os
 import ctypes
@@ -36,7 +38,7 @@ class Application(ctk.CTk): # pylint: disable=too-few-public-methods
         super().__init__()
         self.width = 1552
         self.height = 700
-        self.version = '0.8'
+        self.version = '0.81'
 
         current_path = os.path.dirname(os.path.realpath(__file__))
         icon_dir = os.path.join(current_path, 'icons')
@@ -104,7 +106,7 @@ class Application(ctk.CTk): # pylint: disable=too-few-public-methods
                             msg['priority']['name'],
                             msg['class']['name'],
                             msg['type']['name'],
-                            ' '.join(f'0x{val:02X}' for val in msg['data']) if 0 != msg['dataLen'] else ''
+                            ' '.join(f'0x{val:02X}' for val in msg['data']) if 0 != msg['dataLen'] else '' # pylint: disable=line-too-long
                           ]
                }]
         return data

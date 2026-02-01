@@ -5,6 +5,10 @@ This module provides high-level utilities for interacting with VSCP nodes.
 It includes functionality for scanning the bus, managing node lists,
 reading/writing registers (Extended Page Protocol), broadcasting time,
 and performing firmware updates over CAN.
+
+@file tools.py
+@copyright SPDX-FileCopyrightText: Copyright 2024-2026 by Michal Protasowicki
+@license SPDX-License-Identifier: MIT
 """
 
 # pylint: disable=line-too-long
@@ -21,7 +25,8 @@ from .utils import search
 MAX_CAN_DLC = 8
 THIS_NODE_NICKNAME = 0
 MAX_NICKNAME_ID = 254
-PROBE_SLEEP = 0.025
+# PROBE_SLEEP = 0.025
+PROBE_SLEEP = 0.004
 PROBE_GAP_SHORT = 0.25
 PROBE_GAP_LONG = 1.5
 BLOCK_WRITE_GAP = 5.0
@@ -38,6 +43,7 @@ _nodes: list = []
 _async_work: bool = False
 _this_nickname: int = THIS_NODE_NICKNAME
 _scan_progress_observers: list = []
+_node_id_observers: list = []
 
 
 def is_async_work() -> bool:
@@ -70,6 +76,29 @@ def _update_scan_progress(progress_val) -> None:
     """
     for observer in _scan_progress_observers:
         observer(progress_val)
+
+
+def add_node_id_observer(observer) -> None:
+    """
+    Registers a callback function to observe node ID changes.
+
+    Args:
+        observer (callable): A function that accepts (old_id, new_id).
+    """
+    if callable(observer):
+        _node_id_observers.append(observer)
+
+
+def _notify_node_id_observers(old_id: int, new_id: int) -> None:
+    """
+    Notifies all registered observers of a node ID change.
+
+    Args:
+        old_id (int): The previous node ID.
+        new_id (int): The updated node ID.
+    """
+    for observer in _node_id_observers:
+        observer(old_id, new_id)
 
 
 def guid_str(guid: list) -> str:
@@ -127,6 +156,23 @@ def append_node(node: dict) -> None:
         node (dict): The node information.
     """
     _nodes.append(node)
+
+
+def update_node_id(old_id: int, new_id: int) -> None:
+    """
+    Updates the ID of an existing node in the internal list and sorts the list.
+    Notifies registered observers about the change.
+
+    Args:
+        old_id (int): The current node ID.
+        new_id (int): The new node ID.
+    """
+    for node in _nodes:
+        if node['id'] == old_id:
+            node['id'] = new_id
+            break
+    _nodes.sort(key=lambda x: x['id'])
+    _notify_node_id_observers(old_id, new_id)
 
 
 def get_nodes() -> list:
@@ -193,7 +239,7 @@ async def probe_node(nickname: int):
                 break
             # pylint: enable=unsubscriptable-object
         if not has_parent:
-            progress = progress + step
+            progress = progress + step # type: ignore
             _update_scan_progress(progress)
         if check is True:
             break
@@ -262,7 +308,7 @@ async def get_node_info(nickname: int) -> dict: # pylint: disable=too-many-branc
             if all_data_received is True:
                 break
         if not has_parent:
-            progress = progress + step
+            progress = progress + step # type: ignore
             _update_scan_progress(progress)
         if all_data_received is True:
             break
@@ -480,7 +526,7 @@ async def extended_page_write_register(nickname: int, page: int, register_id: in
 
 
 # TODO add progress
-async def extended_page_read_register(nickname: int, page: int, register_id: int, number_of_regs: int = None) -> list: # pylint: disable=too-many-branches
+async def extended_page_read_register(nickname: int, page: int, register_id: int, number_of_regs: int = None) -> list: # type: ignore # pylint: disable=too-many-branches
     """
     Reads data from registers using the Extended Page Protocol.
 
@@ -553,7 +599,7 @@ async def extended_page_read_register(nickname: int, page: int, register_id: int
     if not has_parent:
         _async_work = False
         _message.disable_feeder(True)
-    return result
+    return result # type: ignore
 
 
 async def _firmware_enter_bootloader_mode(nickname: int, bootloader_type: int) -> dict:
@@ -616,7 +662,7 @@ async def _firmware_enter_bootloader_mode(nickname: int, bootloader_type: int) -
                 break
     except (ValueError, TypeError):
         pass
-    return result
+    return result # type: ignore
 
 
 async def _firmware_send_start_data_block(nickname: int, block_id: int) -> bool:
@@ -739,7 +785,7 @@ async def _firmware_send_data_block(nickname: int, chunk_gap: int, block: list, 
         bool: True if the entire block was successfully sent and verified, False otherwise.
     """
     result = False
-    block_crc = Calculator(Crc16.IBM_3740, True).checksum(bytes(block))
+    block_crc = Calculator(Crc16.IBM_3740, True).checksum(bytes(block)) # type: ignore
     chunks = int(len(block) / MAX_CAN_DLC)
     step = progress_chunk / chunks
     block_progress = progress
@@ -920,7 +966,7 @@ async def firmware_upload(nickname: int, firmware: list) -> bool: # pylint: disa
             block_gap = len(firmware) % flash_block_size
             if 0 != block_gap:
                 firmware.extend(FIRMWARE_FLASH_ERASED_VALUE for _ in range(flash_block_size - block_gap))
-            firmware_crc = Calculator(Crc16.IBM_3740, True).checksum(bytes(firmware))
+            firmware_crc = Calculator(Crc16.IBM_3740, True).checksum(bytes(firmware)) # type: ignore
             blocks_to_program = int(len(firmware) / flash_block_size)
             if blocks_to_program <= number_of_blocks:
                 step = 0.96 / blocks_to_program
@@ -932,7 +978,7 @@ async def firmware_upload(nickname: int, firmware: list) -> bool: # pylint: disa
                         retry += 1
                         success = await _firmware_send_start_data_block(nickname, idx)
                         if success is True:
-                            success = await _firmware_send_data_block(nickname, chunk_gap, block, progress, step)
+                            success = await _firmware_send_data_block(nickname, chunk_gap, block, progress, step) # type: ignore
                         else:
                             await asyncio.sleep(BLOCK_WRITE_GAP)
                         if success is True:

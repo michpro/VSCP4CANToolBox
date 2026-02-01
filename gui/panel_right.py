@@ -3,6 +3,10 @@ Right panel module for the VSCP application.
 
 This module handles the right-side panel of the GUI, which primarily consists
 of the VSCP message logger (treeview) and the detailed event information display.
+
+@file panel_right.py
+@copyright SPDX-FileCopyrightText: Copyright 2024-2026 by Michal Protasowicki
+@license SPDX-License-Identifier: MIT
 """
 # pylint: disable=line-too-long, too-many-ancestors
 
@@ -11,6 +15,7 @@ import os
 import csv
 import customtkinter as ctk
 from CTkMessagebox import CTkMessagebox
+import vscp
 from vscp import dictionary
 from .treeview import CTkTreeview
 from .common import add_event_info_handle, event_info_handle
@@ -61,6 +66,7 @@ class Messages(ctk.CTkFrame):
         self.dropdown_bt_save_log = ctk.CTkButton(self.dropdown.frame, border_spacing=0, corner_radius=0,
                                                   text="Save log to file", command=self._save_log)
         self.dropdown_bt_save_log.pack(expand=True, fill="x", padx=0, pady=0)
+        vscp.add_node_id_observer(self.update_node_id)
 
 
     def _parse_msg_data(self, _):
@@ -74,7 +80,7 @@ class Messages(ctk.CTkFrame):
         selected_rows = self.messages.treeview.selection()
         if 1 == len(selected_rows):
             values = self.messages.treeview.item(selected_rows[0])['values']
-        event_info_handle().display(values)
+        event_info_handle().display(values) # type: ignore
 
 
     def insert(self, row_data):
@@ -85,6 +91,23 @@ class Messages(ctk.CTkFrame):
             row_data: A list of values representing the message data to display.
         """
         self.messages.insert_items(row_data)
+
+
+    def update_node_id(self, old_id, new_id):
+        """
+        Update the displayed NodeID in the message list.
+
+        Args:
+            old_id (int): The old Node ID.
+            new_id (int): The new Node ID.
+        """
+        old_id_str = f"0x{old_id:02X}"
+        new_id_str = f"0x{new_id:02X}"
+        for item in self.messages.treeview.get_children():
+            values = list(self.messages.treeview.item(item, 'values'))
+            if len(values) > 2 and values[2] == old_id_str:
+                values[2] = new_id_str
+                self.messages.treeview.item(item, values=values)
 
 
     def item_deselect(self, event):
@@ -119,7 +142,7 @@ class Messages(ctk.CTkFrame):
         """
         filetypes = [('CSV Log File', '*.csv')]
         fname = ctk.filedialog.asksaveasfilename(confirmoverwrite=True, initialfile='vscp_log',
-                                                 filetypes=filetypes, defaultextension=filetypes)
+                                                 filetypes=filetypes, defaultextension=filetypes) # type: ignore
         if fname:
             with open(fname, "w", newline='', encoding='UTF-8') as log_file:
                 csvwriter = csv.writer(log_file, delimiter=',')
@@ -171,10 +194,10 @@ class EventInfo(ctk.CTkFrame): # pylint: disable=too-few-public-methods
         super().__init__(self.parent)
 
         font = ctk.CTkFont(family='Ubuntu Mono', size=16)
-        self.event_info = ctk.CTkTextbox(self.parent, font=font, border_spacing=1, width=480, fg_color=self._fg_color)
-        self.event_info.pack(padx=(5, 0), pady=(5, 5), side='top', anchor='nw', fill='y', expand=False)
-        self.event_info.bind("<Button-1>", 'break')
-        self.event_info.configure(state='disabled')
+        self.event_info = ctk.CTkTextbox(self.parent, font=font, border_spacing=1, width=480, fg_color=self._fg_color) # type: ignore
+        self.event_info.pack(padx=(5, 0), pady=(5, 5), side='top', anchor='nw', fill='y', expand=False) # type: ignore
+        self.event_info.bind("<Button-1>", 'break') # type: ignore
+        self.event_info.configure(state='disabled') # type: ignore
 
 
     def display(self, data: list) -> None:
@@ -187,8 +210,8 @@ class EventInfo(ctk.CTkFrame): # pylint: disable=too-few-public-methods
         Args:
             data: A list containing raw message fields (timestamp, dir, id, priority, class, type, data).
         """
-        self.event_info.configure(state='normal')
-        self.event_info.delete('1.0', 'end')
+        self.event_info.configure(state='normal') # type: ignore
+        self.event_info.delete('1.0', 'end') # type: ignore
         if 0 != len(data):
             descr_len = 18
             class_id = dictionary.class_id(data[4])
@@ -200,8 +223,8 @@ class EventInfo(ctk.CTkFrame): # pylint: disable=too-few-public-methods
                 val += item[0].ljust(descr_len)[:descr_len] if 0 != idx else item[0] + (os.linesep * 2)
                 if 0 != idx:
                     val += item[1] + os.linesep
-            self.event_info.insert('end', val)
-        self.event_info.configure(state='disabled')
+            self.event_info.insert('end', val) # type: ignore
+        self.event_info.configure(state='disabled') # type: ignore
 
 
 class RightPanel(ctk.CTkFrame): # pylint: disable=too-few-public-methods
