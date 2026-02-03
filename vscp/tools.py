@@ -13,11 +13,11 @@ and performing firmware updates over CAN.
 
 # pylint: disable=line-too-long
 
-
 import time
 import datetime
 import asyncio
 from crc import Calculator, Crc16
+from gui.common import update_progress # pylint: disable=no-name-in-module
 from .message import Message
 from .utils import search
 
@@ -25,8 +25,7 @@ from .utils import search
 MAX_CAN_DLC = 8
 THIS_NODE_NICKNAME = 0
 MAX_NICKNAME_ID = 254
-# PROBE_SLEEP = 0.025
-PROBE_SLEEP = 0.004
+PROBE_SLEEP = 0.0025
 PROBE_GAP_SHORT = 0.25
 PROBE_GAP_LONG = 1.5
 BLOCK_WRITE_GAP = 5.0
@@ -42,8 +41,23 @@ _message = Message()
 _nodes: list = []
 _async_work: bool = False
 _this_nickname: int = THIS_NODE_NICKNAME
-_scan_progress_observers: list = []
 _node_id_observers: list = []
+
+
+def set_async_work(async_work: bool) -> None:
+    """
+    Sets the asynchronous work state and controls the message feeder.
+
+    Args:
+        async_work (bool): True if an asynchronous operation is active,
+                           False otherwise.
+    """
+    global _async_work # pylint: disable=global-statement
+    _async_work = async_work
+    if async_work:
+        _message.enable_feeder()
+    else:
+        _message.disable_feeder()
 
 
 def is_async_work() -> bool:
@@ -54,28 +68,6 @@ def is_async_work() -> bool:
         bool: True if busy, False otherwise.
     """
     return _async_work
-
-
-def add_scan_progress_observer(observer) -> None:
-    """
-    Registers a callback function to observe scan or operation progress.
-
-    Args:
-        observer (callable): A function that accepts a float (0.0 to 1.0).
-    """
-    if callable(observer):
-        _scan_progress_observers.append(observer)
-
-
-def _update_scan_progress(progress_val) -> None:
-    """
-    Notifies all registered observers of the current progress.
-
-    Args:
-        progress_val (float): Progress value between 0.0 and 1.0.
-    """
-    for observer in _scan_progress_observers:
-        observer(progress_val)
 
 
 def add_node_id_observer(observer) -> None:
@@ -209,7 +201,7 @@ async def probe_node(nickname: int):
     if _async_work is False:
         _async_work = True
         _message.enable_feeder()
-        _update_scan_progress(0.0)
+        update_progress(0.0)
     result = None
     vscp_msg = {
         'class':        {'id': None,    'name': 'CLASS1.PROTOCOL'},
@@ -223,7 +215,7 @@ async def probe_node(nickname: int):
     if not has_parent:
         step = 0.5 / PROBE_RETRIES_SHORT
         progress = 0.5
-        _update_scan_progress(progress)
+        update_progress(progress)
     for _ in range(PROBE_RETRIES_SHORT):
         check = False
         await asyncio.sleep(PROBE_SLEEP)
@@ -240,13 +232,13 @@ async def probe_node(nickname: int):
             # pylint: enable=unsubscriptable-object
         if not has_parent:
             progress = progress + step # type: ignore
-            _update_scan_progress(progress)
+            update_progress(progress)
         if check is True:
             break
     if not has_parent:
         _async_work = False
         _message.disable_feeder(True)
-        _update_scan_progress(1.0)
+        update_progress(1.0)
     return result
 
 
@@ -268,7 +260,7 @@ async def get_node_info(nickname: int) -> dict: # pylint: disable=too-many-branc
     if _async_work is False:
         _async_work = True
         _message.enable_feeder()
-        _update_scan_progress(0.0)
+        update_progress(0.0)
     vscp_msg = {
         'class':        {'id': None,    'name': 'CLASS1.PROTOCOL'},
         'type':         {'id': None,    'name': 'WHO_IS_THERE'},
@@ -281,7 +273,7 @@ async def get_node_info(nickname: int) -> dict: # pylint: disable=too-many-branc
     if not has_parent:
         step = 0.5 / PROBE_RETRIES_SHORT
         progress = 0.5
-        _update_scan_progress(progress)
+        update_progress(progress)
     max_response_messages = 7
     temp_result = {}
     guid = []
@@ -309,7 +301,7 @@ async def get_node_info(nickname: int) -> dict: # pylint: disable=too-many-branc
                 break
         if not has_parent:
             progress = progress + step # type: ignore
-            _update_scan_progress(progress)
+            update_progress(progress)
         if all_data_received is True:
             break
     if all_data_received is True:
@@ -326,7 +318,7 @@ async def get_node_info(nickname: int) -> dict: # pylint: disable=too-many-branc
     if not has_parent:
         _async_work = False
         _message.disable_feeder(True)
-        _update_scan_progress(1.0)
+        update_progress(1.0)
     return {'id': nickname, 'isHardCoded': is_hardcoded, 'guid': {'val': guid, 'str': guid_str(guid)}, 'mdf': mdf} if all_data_received else {}
 
 
@@ -345,7 +337,7 @@ async def scan(min_node_id: int = 0, max_node_id: int = MAX_NICKNAME_ID) -> int:
     """
     global _async_work # pylint: disable=global-statement
     progress = 0.0
-    _update_scan_progress(progress)
+    update_progress(progress)
     result = -1
     if _async_work is False:
         _async_work = True
@@ -362,17 +354,17 @@ async def scan(min_node_id: int = 0, max_node_id: int = MAX_NICKNAME_ID) -> int:
                 if nickname is not None and is_node_on_list(nickname) is False:
                     _nodes.append({'id': nickname})
             progress = progress + step
-            _update_scan_progress(progress)
+            update_progress(progress)
         result = len(_nodes)
         if result > 0:
             step = 0.5 / result
             for idx, node in enumerate(_nodes):
                 _nodes[idx] = await get_node_info(node['id'])
                 progress = progress + step
-                _update_scan_progress(progress)
+                update_progress(progress)
         _message.disable_feeder(True)
         _async_work = False
-    _update_scan_progress(1.0)
+    update_progress(1.0)
     return result
 
 
@@ -382,7 +374,7 @@ async def send_host_datetime():
     """
     system_lag_fix_us = -5000
     global _async_work # pylint: disable=global-statement
-    _update_scan_progress(0.0)
+    update_progress(0.0)
     if _async_work is False:
         _async_work = True
         vscp_msg = {
@@ -392,7 +384,7 @@ async def send_host_datetime():
             'nickName':     _this_nickname,
             'isHardCoded':  False
             }
-        _update_scan_progress(0.5)
+        update_progress(0.5)
         now = datetime.datetime.now()
         wait_time = float((1 - ((now.time().microsecond + system_lag_fix_us) / 1000000.0)))
         now = now + datetime.timedelta(seconds=1)
@@ -410,7 +402,7 @@ async def send_host_datetime():
             await asyncio.sleep(wait_time)
         _message.send(vscp_msg)
         _async_work = False
-    _update_scan_progress(1.0)
+    update_progress(1.0)
 
 
 async def set_nickname(old_nickname: int, new_nickname: int) -> bool:
@@ -426,12 +418,12 @@ async def set_nickname(old_nickname: int, new_nickname: int) -> bool:
     """
     global _async_work # pylint: disable=global-statement
     progress = 0.0
-    _update_scan_progress(progress)
+    update_progress(progress)
     result = False
     if _async_work is False:
         _async_work = True
         progress = 0.5
-        _update_scan_progress(progress)
+        update_progress(progress)
         _message.enable_feeder()
         vscp_msg = {
             'class':        {'id': None,    'name': 'CLASS1.PROTOCOL'},
@@ -458,10 +450,10 @@ async def set_nickname(old_nickname: int, new_nickname: int) -> bool:
             if result is True:
                 break
             progress = progress + step
-            _update_scan_progress(progress)
+            update_progress(progress)
         _message.disable_feeder(True)
         _async_work = False
-    _update_scan_progress(1.0)
+    update_progress(1.0)
     return result
 
 
@@ -525,8 +517,7 @@ async def extended_page_write_register(nickname: int, page: int, register_id: in
     return result
 
 
-# TODO add progress
-async def extended_page_read_register(nickname: int, page: int, register_id: int, number_of_regs: int = None) -> list: # type: ignore # pylint: disable=too-many-branches
+async def extended_page_read_register(nickname: int, page: int, register_id: int, number_of_regs: int = None) -> list: # type: ignore # pylint: disable=too-many-branches, too-many-statements
     """
     Reads data from registers using the Extended Page Protocol.
 
@@ -544,6 +535,7 @@ async def extended_page_read_register(nickname: int, page: int, register_id: int
     if _async_work is False:
         _async_work = True
         _message.enable_feeder()
+        update_progress(0.0)
     result = None
     check = (   (max(min(0xFFFF, page), 0) == page)
             and (max(min(0xFF, register_id), 0) == register_id)
@@ -569,6 +561,10 @@ async def extended_page_read_register(nickname: int, page: int, register_id: int
         temp_result = {}
         all_data_received = False
         for _ in range(PROBE_RETRIES_LONG):
+            if not has_parent:
+                step = 1 / (1 + max_response_messages)
+                progress = step
+                update_progress(progress)
             await asyncio.sleep(PROBE_SLEEP)
             while _message.available() > 0:
                 # pylint: disable=unsubscriptable-object
@@ -581,13 +577,18 @@ async def extended_page_read_register(nickname: int, page: int, register_id: int
                             )
                 except (ValueError, TypeError):
                     check = False
+                idx = 1
                 if check is True:
                     try:
-                        temp_result[int(vscp_result['data'][0])] = vscp_result['data'][4:]
+                        idx = int(vscp_result['data'][0])
+                        temp_result[idx] = vscp_result['data'][4:]
                     except (ValueError, TypeError):
                         pass
                     all_data_received = len(temp_result) == max_response_messages
                 # pylint: enable=unsubscriptable-object
+                if not has_parent:
+                    progress = progress + step # type: ignore
+                    update_progress(progress)
                 if all_data_received is True:
                     break
             if all_data_received is True:
@@ -599,6 +600,7 @@ async def extended_page_read_register(nickname: int, page: int, register_id: int
     if not has_parent:
         _async_work = False
         _message.disable_feeder(True)
+        update_progress(1.0)
     return result # type: ignore
 
 
@@ -794,7 +796,7 @@ async def _firmware_send_data_block(nickname: int, chunk_gap: int, block: list, 
         if result is False:
             break
         block_progress = block_progress + step
-        _update_scan_progress(block_progress)
+        update_progress(block_progress)
     if result is True:
         stop = False
         result = False
@@ -952,14 +954,14 @@ async def firmware_upload(nickname: int, firmware: list) -> bool: # pylint: disa
     global _async_work # pylint: disable=global-statement
     result = False
     progress = 0.0
-    _update_scan_progress(progress)
+    update_progress(progress)
     if _async_work is False: # pylint: disable=too-many-nested-blocks
         _async_work = True
         _message.enable_feeder()
         bootloader_type = 0x00
         device_block_params = await _firmware_enter_bootloader_mode(nickname, bootloader_type)
         progress = 0.02
-        _update_scan_progress(progress)
+        update_progress(progress)
         if device_block_params is not None:
             flash_block_size = device_block_params[0]
             number_of_blocks = device_block_params[1]
@@ -986,13 +988,13 @@ async def firmware_upload(nickname: int, firmware: list) -> bool: # pylint: disa
                         if success is True:
                             break
                     progress = progress + step
-                    _update_scan_progress(progress)
+                    update_progress(progress)
                     if success is False:
                         break #Fail to program firmware
-                _update_scan_progress(0.98)
+                update_progress(0.98)
                 if success is True:
                     result = await _firmware_activate_new_image(nickname, firmware_crc)
         _message.disable_feeder(True)
         _async_work = False
-    _update_scan_progress(1.0)
+    update_progress(1.0)
     return result

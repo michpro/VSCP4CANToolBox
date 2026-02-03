@@ -5,6 +5,10 @@ This module provides common utility functions and shared state management
 for the GUI application. It handles callback registration for scan widget updates,
 stores references to main UI handles (neighbours, event info), and maintains
 a local dictionary of node information.
+
+@file common.py
+@copyright SPDX-FileCopyrightText: Copyright 2024-2026 by Michal Protasowicki
+@license SPDX-License-Identifier: MIT
 """
 
 # pylint: disable=line-too-long
@@ -14,6 +18,29 @@ _set_scan_widget_state_cb: object = None
 _neighbours_handle: object = None
 _event_info_handle: object = None
 _nodes: dict = {}
+_progress_observers: list = []
+
+
+def add_progress_observer(observer) -> None:
+    """
+    Registers a callback function to observe scan or operation progress.
+
+    Args:
+        observer (callable): A function that accepts a float (0.0 to 1.0).
+    """
+    if callable(observer):
+        _progress_observers.append(observer)
+
+
+def update_progress(progress_val) -> None:
+    """
+    Notifies all registered observers of the current progress.
+
+    Args:
+        progress_val (float): Progress value between 0.0 and 1.0.
+    """
+    for observer in _progress_observers:
+        observer(progress_val)
 
 
 def add_set_state_callback(callback) -> None:
@@ -83,7 +110,7 @@ def event_info_handle() -> object:
     return _event_info_handle
 
 
-def set_node_info(key: int, value: any) -> None:
+def set_node_info(key: int, value: any) -> None: # type: ignore
     """
     Updates or adds information for a specific node in the local cache.
 
@@ -94,7 +121,7 @@ def set_node_info(key: int, value: any) -> None:
     _nodes[key] = value
 
 
-def get_node_info(key) -> any:
+def get_node_info(key) -> any: # type: ignore
     """
     Retrieves information for a specific node from the local cache.
 

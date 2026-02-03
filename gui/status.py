@@ -3,6 +3,10 @@ Status bar module.
 
 Manages the bottom status bar, including the progress bar, PHY interface connection
 controls, and status indicators.
+
+@file status.py
+@copyright SPDX-FileCopyrightText: Copyright 2024-2026 by Michal Protasowicki
+@license SPDX-License-Identifier: MIT
 """
 # pylint: disable=line-too-long, too-many-ancestors, too-many-instance-attributes
 
@@ -13,7 +17,7 @@ from PIL import Image, ImageTk
 import phy
 import vscp
 import gui
-from .common import call_set_scan_widget_state
+from .common import call_set_scan_widget_state, add_progress_observer
 from .popup import CTkFloatingWindow
 
 class StatusFrame(ctk.CTkFrame): # pylint: disable=too-few-public-methods
@@ -51,7 +55,7 @@ class StatusFrame(ctk.CTkFrame): # pylint: disable=too-few-public-methods
                                            determinate_speed=0.5)
         self.progress.pack(padx=(3, 0), pady=elements_pady, side='left', anchor='nw', fill='y', expand=False)
         self.progress.set(1)
-        vscp.add_scan_progress_observer(self.update_progress)
+        add_progress_observer(self.update_progress)
         btn_width = 42
         btn_height = elements_height
         btn_set = 0
@@ -65,19 +69,19 @@ class StatusFrame(ctk.CTkFrame): # pylint: disable=too-few-public-methods
 
         self.phy_bitrate_var = ctk.StringVar(value=phy.driver.default_bitrate_key)
         self.phy_bitrate = ctk.CTkComboBox(self.widget, width=90, height=elements_height, fg_color=elements_fg_color,
-                                           values=phy.driver.bitrates.keys(), variable=self.phy_bitrate_var,
+                                           values=phy.driver.bitrates.keys(), variable=self.phy_bitrate_var, # type: ignore
                                            state='readonly')
         self.phy_bitrate.pack(padx=2, pady=elements_pady, side='right', anchor='ne', fill='y')
 
         self.phy_channel_var = ctk.StringVar(value=phy.driver.channel)
         self.phy_channel = ctk.CTkComboBox(self.widget, width=90, height=elements_height, fg_color=elements_fg_color,
-                                           values=phy.driver.channels.keys(), variable=self.phy_channel_var,
+                                           values=phy.driver.channels.keys(), variable=self.phy_channel_var, # type: ignore
                                            state='readonly')
         self.phy_channel.pack(padx=2, pady=elements_pady, side='right', anchor='ne', fill='y')
 
         self.phy_interface_var = ctk.StringVar(value=phy.driver.interface)
         self.phy_interface = ctk.CTkComboBox(self.widget, width=90, height=elements_height, fg_color=elements_fg_color,
-                                             values=phy.driver.interfaces.keys(), variable=self.phy_interface_var,
+                                             values=phy.driver.interfaces.keys(), variable=self.phy_interface_var, # type: ignore
                                              state='readonly', command=self._phy_interface_selected)
         self.phy_interface.pack(padx=2, pady=elements_pady, side='right', anchor='ne', fill='y')
         self.phy_interface.bind('<Button-3>', lambda event: self._show_search_menu(event, self.dropdown))
@@ -132,7 +136,7 @@ class StatusFrame(ctk.CTkFrame): # pylint: disable=too-few-public-methods
                                  bus=channel_data['bus'],
                                  address=channel_data['address'],
                                  bitrate=phy.driver.bitrates[self.phy_bitrate.get()])
-            phy.driver.initialize([gui.app.message_dispatcher, vscp.message.feeder])
+            phy.driver.initialize([gui.app.message_dispatcher, vscp.message.feeder]) # type: ignore
             img = self.img_on
             state = 'disabled'
             call_set_scan_widget_state('normal')

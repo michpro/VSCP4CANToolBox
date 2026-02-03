@@ -330,7 +330,7 @@ class ScanWidget(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
         # self.toggle.configure(state=state)
 
 
-class Neighbours(ctk.CTkFrame):
+class Neighbours(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
     """
     Widget displaying a treeview of discovered VSCP nodes.
 
@@ -361,15 +361,15 @@ class Neighbours(ctk.CTkFrame):
         self.neighbours.treeview.bind('<Button-3>', lambda event: self._show_menu(event, self.dropdown))
 
         self.dropdown = CTkFloatingWindow(self.neighbours)
-        self.dropdown_bt_firmware = ctk.CTkButton(self.dropdown.frame, border_spacing=0, corner_radius=0,
-                                                  text="Upload Firmware", command=self._firmware_upload)
-        self.dropdown_bt_firmware.pack(expand=True, fill="x", padx=0, pady=0)
-        self.dropdown_bt_configure = ctk.CTkButton(self.dropdown.frame, border_spacing=0, corner_radius=0,
-                                                   text="Configure Node", command=self._configure_node)
-        self.dropdown_bt_configure.pack(expand=True, fill="x", padx=0, pady=0)
         self.dropdown_bt_chg_node_id = ctk.CTkButton(self.dropdown.frame, border_spacing=0, corner_radius=0,
                                                    text="Change Node ID", command=self._change_node_id)
         self.dropdown_bt_chg_node_id.pack(expand=True, fill="x", padx=0, pady=0)
+        self.dropdown_bt_configure = ctk.CTkButton(self.dropdown.frame, border_spacing=0, corner_radius=0,
+                                                   text="Configure Node", command=self._configure_node)
+        self.dropdown_bt_configure.pack(expand=True, fill="x", padx=0, pady=0)
+        self.dropdown_bt_firmware = ctk.CTkButton(self.dropdown.frame, border_spacing=0, corner_radius=0,
+                                                  text="Upload Firmware", command=self._firmware_upload)
+        self.dropdown_bt_firmware.pack(expand=True, fill="x", padx=0, pady=0)
         # TODO remove
         # data = []
         # for idx in range(1, 5):
