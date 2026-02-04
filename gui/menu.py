@@ -4,6 +4,10 @@ Application Menu Module.
 This module defines the main application menu bar using CTkMenuBar.
 It handles file and settings menu options and their associated commands,
 such as exiting the application.
+
+@file menu.py
+@copyright SPDX-FileCopyrightText: Copyright 2024-2026 by Michal Protasowicki
+@license SPDX-License-Identifier: MIT
 """
 
 # import customtkinter as ctk

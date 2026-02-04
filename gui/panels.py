@@ -3,6 +3,10 @@ Main application panels module.
 
 This module initializes the main split-view layout containing the left panel
 (configuration/scanning) and the right panel (logging/events).
+
+@file panels.py
+@copyright SPDX-FileCopyrightText: Copyright 2024-2026 by Michal Protasowicki
+@license SPDX-License-Identifier: MIT
 """
 # pylint: disable=too-many-ancestors
 

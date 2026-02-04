@@ -4,6 +4,10 @@ Local HTTP Server Module.
 This module implements a simple, threaded HTTP server to serve static resources
 (like icons) to the application if needed, or to act as a local web interface endpoint.
 It provides a mechanism to start and stop the server in a separate thread.
+
+@file http_server.py
+@copyright SPDX-FileCopyrightText: Copyright 2024-2026 by Michal Protasowicki
+@license SPDX-License-Identifier: MIT
 """
 
 # pylint: disable=

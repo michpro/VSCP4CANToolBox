@@ -6,6 +6,10 @@ This script serves as the bootstrap for the VSCP4CAN Toolbox application.
 It handles the initialization of the backend server, configures the
 asynchronous execution wrapper for Tkinter, and manages the application's
 main lifecycle loop.
+
+@file VSCP4CANToolBox.pyw
+@copyright SPDX-FileCopyrightText: Copyright 2024-2026 by Michal Protasowicki
+@license SPDX-License-Identifier: MIT
 """
 
 import tk_async_execute as tae

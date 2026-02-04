@@ -3,6 +3,10 @@ Custom popup window module.
 
 Provides a floating window class for CustomTkinter that can be used for menus
 or temporary dialogs.
+
+@file popup.py
+@copyright SPDX-FileCopyrightText: Copyright 2024-2026 by Michal Protasowicki
+@license SPDX-License-Identifier: MIT
 """
 # pylint: disable=too-many-instance-attributes, line-too-long
 

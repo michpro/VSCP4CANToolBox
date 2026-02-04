@@ -7,6 +7,10 @@ This module provides a wrapper around the python-can library to handle
 CAN bus communication. It supports interface detection (specifically for
 PCAN and GS_USB devices), configuration, and lifecycle management of the
 bus connection.
+
+@file driver.py
+@copyright SPDX-FileCopyrightText: Copyright 2024-2026 by Michal Protasowicki
+@license SPDX-License-Identifier: MIT
 """
 
 import os
