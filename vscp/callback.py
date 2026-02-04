@@ -4,8 +4,13 @@ VSCP Callback Module.
 This module defines the Callback class which acts as a handler for incoming
 CAN messages, parsing them into VSCP format and distributing them to
 registered callback functions.
+
+@file callback.py
+@copyright SPDX-FileCopyrightText: Copyright 2024-2026 by Michal Protasowicki
+@license SPDX-License-Identifier: MIT
 """
 
+import numpy as np
 from can.message import Message
 from can.io.generic import MessageWriter
 from .message import Message as VSCPMsg
@@ -22,7 +27,7 @@ class Callback(MessageWriter):
     file = None
 
 
-    def __init__(self, cb: list = None) -> None:
+    def __init__(self, cb: list | None = None) -> None:
         """
         Initializes the Callback instance.
 
@@ -47,13 +52,13 @@ class Callback(MessageWriter):
         """
         if msg.is_extended_id is True:
             message = VSCPMsg()
-            vscp_msg = message.parse_id(msg.arbitration_id)
+            vscp_msg = message.parse_id(np.uint32(msg.arbitration_id))
             vscp_msg['dataLen'] = msg.dlc
             vscp_msg['data'] = list(msg.data)
             vscp_msg['timestamp'] = msg.timestamp
             vscp_msg['dir'] = 'RX' if msg.is_rx else 'TX'
             try:
-                for func in self.cb_func:
+                for func in self.cb_func or []:
                     if func is not None:
                         try:
                             func(vscp_msg)
@@ -70,4 +75,3 @@ class Callback(MessageWriter):
         Args:
             exc (Exception): The exception that was raised.
         """
-        pass

@@ -11,7 +11,7 @@ and performing firmware updates over CAN.
 @license SPDX-License-Identifier: MIT
 """
 
-# pylint: disable=line-too-long
+# pylint: disable=too-many-lines
 
 import time
 import datetime
@@ -198,6 +198,8 @@ async def probe_node(nickname: int):
     """
     global _async_work # pylint: disable=global-statement
     has_parent = _async_work
+    progress = 0.0
+    step = 0.5 / PROBE_RETRIES_SHORT
     if _async_work is False:
         _async_work = True
         _message.enable_feeder()
@@ -213,7 +215,6 @@ async def probe_node(nickname: int):
         }
     _message.send(vscp_msg)
     if not has_parent:
-        step = 0.5 / PROBE_RETRIES_SHORT
         progress = 0.5
         update_progress(progress)
     for _ in range(PROBE_RETRIES_SHORT):
@@ -221,17 +222,16 @@ async def probe_node(nickname: int):
         await asyncio.sleep(PROBE_SLEEP)
         while _message.available() > 0:
             vscp_result = _message.pop_front()
-            # pylint: disable=unsubscriptable-object
-            check = (   (vscp_result['class']['name'] == vscp_msg['class']['name'])
-                    and (vscp_result['type']['name'] == 'PROBE_ACK')
-                    )
-            if check is True:
-                result = vscp_result['nickName']
-                _message.flush()
-                break
-            # pylint: enable=unsubscriptable-object
+            if vscp_result is not None:
+                check = (   (vscp_result['class']['name'] == vscp_msg['class']['name'])
+                        and (vscp_result['type']['name'] == 'PROBE_ACK')
+                        )
+                if check is True:
+                    result = vscp_result['nickName']
+                    _message.flush()
+                    break
         if not has_parent:
-            progress = progress + step # type: ignore
+            progress = progress + step
             update_progress(progress)
         if check is True:
             break
@@ -242,7 +242,7 @@ async def probe_node(nickname: int):
     return result
 
 
-async def get_node_info(nickname: int) -> dict: # pylint: disable=too-many-branches, too-many-locals
+async def get_node_info(nickname: int) -> dict: # pylint: disable=too-many-branches, too-many-locals, too-many-statements
     """
     Retrieves detailed information (GUID, MDF) from a node.
 
@@ -257,6 +257,8 @@ async def get_node_info(nickname: int) -> dict: # pylint: disable=too-many-branc
     """
     global _async_work # pylint: disable=global-statement
     has_parent = _async_work
+    progress = 0.0
+    step = 0.5 / PROBE_RETRIES_SHORT
     if _async_work is False:
         _async_work = True
         _message.enable_feeder()
@@ -271,7 +273,6 @@ async def get_node_info(nickname: int) -> dict: # pylint: disable=too-many-branc
         }
     _message.send(vscp_msg)
     if not has_parent:
-        step = 0.5 / PROBE_RETRIES_SHORT
         progress = 0.5
         update_progress(progress)
     max_response_messages = 7
@@ -283,24 +284,23 @@ async def get_node_info(nickname: int) -> dict: # pylint: disable=too-many-branc
     for _ in range(PROBE_RETRIES_LONG):
         await asyncio.sleep(PROBE_SLEEP)
         while _message.available() > 0:
-            # pylint: disable=unsubscriptable-object
             vscp_result = _message.pop_front()
-            check = (   (vscp_result['class']['name'] == vscp_msg['class']['name'])
-                    and (vscp_result['type']['name'] == 'WHO_IS_THERE_RESPONSE')
-                    and (vscp_result['nickName'] == nickname)
-                    )
-            if check is True:
-                is_hardcoded = vscp_result['isHardCoded']
-                try:
-                    temp_result[int(vscp_result['data'][0])] = vscp_result['data'][1:]
-                except (ValueError, TypeError):
-                    pass
-                all_data_received = len(temp_result) == max_response_messages
-            # pylint: enable=unsubscriptable-object
+            if vscp_result is not None:
+                check = (   (vscp_result['class']['name'] == vscp_msg['class']['name'])
+                        and (vscp_result['type']['name'] == 'WHO_IS_THERE_RESPONSE')
+                        and (vscp_result['nickName'] == nickname)
+                        )
+                if check is True:
+                    is_hardcoded = vscp_result['isHardCoded']
+                    try:
+                        temp_result[int(vscp_result['data'][0])] = vscp_result['data'][1:]
+                    except (ValueError, TypeError):
+                        pass
+                    all_data_received = len(temp_result) == max_response_messages
             if all_data_received is True:
                 break
         if not has_parent:
-            progress = progress + step # type: ignore
+            progress = progress + step
             update_progress(progress)
         if all_data_received is True:
             break
@@ -319,7 +319,7 @@ async def get_node_info(nickname: int) -> dict: # pylint: disable=too-many-branc
         _async_work = False
         _message.disable_feeder(True)
         update_progress(1.0)
-    return {'id': nickname, 'isHardCoded': is_hardcoded, 'guid': {'val': guid, 'str': guid_str(guid)}, 'mdf': mdf} if all_data_received else {}
+    return {'id': nickname, 'isHardCoded': is_hardcoded, 'guid': {'val': guid, 'str': guid_str(guid)}, 'mdf': mdf} if all_data_received else {} # pylint: disable=line-too-long
 
 
 async def scan(min_node_id: int = 0, max_node_id: int = MAX_NICKNAME_ID) -> int:
@@ -439,14 +439,13 @@ async def set_nickname(old_nickname: int, new_nickname: int) -> bool:
             await asyncio.sleep(PROBE_SLEEP)
             while _message.available() > 0:
                 vscp_result = _message.pop_front()
-                # pylint: disable=unsubscriptable-object
-                result =    ((vscp_result['class']['name'] == vscp_msg['class']['name'])
-                              and (vscp_result['type']['name'] == 'NICKNAME_ACCEPTED')
-                              and (vscp_result['nickName'] == new_nickname)
-                            )
-                # pylint: enable=unsubscriptable-object
-                if result is True:
-                    break
+                if vscp_result is not None:
+                    result =    ((vscp_result['class']['name'] == vscp_msg['class']['name'])
+                                and (vscp_result['type']['name'] == 'NICKNAME_ACCEPTED')
+                                and (vscp_result['nickName'] == new_nickname)
+                                )
+                    if result is True:
+                        break
             if result is True:
                 break
             progress = progress + step
@@ -457,7 +456,8 @@ async def set_nickname(old_nickname: int, new_nickname: int) -> bool:
     return result
 
 
-async def extended_page_write_register(nickname: int, page: int, register_id: int, reg_vals: list) -> bool: # TODO add progress
+# TODO add progress
+async def extended_page_write_register(nickname: int, page: int, register_id: int, reg_vals: list) -> bool: # pylint: disable=line-too-long
     """
     Writes data to registers using the Extended Page Protocol.
 
@@ -486,30 +486,33 @@ async def extended_page_write_register(nickname: int, page: int, register_id: in
                 'priority':     {'id': None,    'name': 'Lower'},
                 'nickName':     _this_nickname,
                 'isHardCoded':  False,
-                'data':         [nickname] + list(page.to_bytes(2, 'big')) + [register_id] + reg_vals
+                'data':         [nickname] + list(page.to_bytes(2, 'big')) + [register_id] + reg_vals # pylint: disable=line-too-long
                 }
             _message.send(vscp_msg)
             for _ in range(PROBE_RETRIES_LONG):
                 await asyncio.sleep(PROBE_SLEEP)
                 while _message.available() > 0:
-                    # pylint: disable=unsubscriptable-object
                     vscp_result = _message.pop_front()
                     try:
-                        check = (   (vscp_result['class']['name'] == vscp_msg['class']['name'])
-                                and (vscp_result['type']['name'] == 'EXTENDED_PAGE_RESPONSE')
-                                and (vscp_result['nickName'] == nickname)
-                                and (page == int.from_bytes(bytes(vscp_result['data'][1:3]), 'big'))
-                                )
+                        if vscp_result is not None:
+                            check = (   (vscp_result['class']['name'] == vscp_msg['class']['name'])
+                                    and (vscp_result['type']['name'] == 'EXTENDED_PAGE_RESPONSE')
+                                    and (vscp_result['nickName'] == nickname)
+                                    and (page == int.from_bytes(bytes(vscp_result['data'][1:3]), 'big')) # pylint: disable=line-too-long
+                                    )
+                        else:
+                            check = False
                     except (ValueError, TypeError):
                         check = False
                     if check is True:
+                        temp_result = []
                         try:
-                            temp_result = vscp_result['data'][4:]
+                            if vscp_result is not None:
+                                temp_result = vscp_result['data'][4:]
                         except (ValueError, TypeError):
-                            temp_result = []
+                            pass
                         result = reg_vals == temp_result
                         break
-                    # pylint: enable=unsubscriptable-object
                 if check is True:
                     break
         _message.disable_feeder(True)
@@ -517,7 +520,8 @@ async def extended_page_write_register(nickname: int, page: int, register_id: in
     return result
 
 
-async def extended_page_read_register(nickname: int, page: int, register_id: int, number_of_regs: int = None) -> list: # type: ignore # pylint: disable=too-many-branches, too-many-statements
+async def extended_page_read_register(nickname: int, page: int, register_id: int, number_of_regs: int | None = None) -> list | None: # pylint: disable=line-too-long, too-many-branches, too-many-statements
+    # pylint: disable=line-too-long
     """
     Reads data from registers using the Extended Page Protocol.
 
@@ -530,20 +534,22 @@ async def extended_page_read_register(nickname: int, page: int, register_id: int
     Returns:
         list: A list of bytes read from the registers, or None if failed.
     """
+    # pylint: enable=line-too-long
     global _async_work # pylint: disable=global-statement
     has_parent = _async_work
+    progress = 0.0
     if _async_work is False:
         _async_work = True
         _message.enable_feeder()
-        update_progress(0.0)
+        update_progress(progress)
     result = None
     check = (   (max(min(0xFFFF, page), 0) == page)
             and (max(min(0xFF, register_id), 0) == register_id)
             and (number_of_regs is None
-                 or (number_of_regs is not None and (max(min(0xFF, number_of_regs), 0) == number_of_regs))
+                 or (number_of_regs is not None and (max(min(0xFF, number_of_regs), 0) == number_of_regs)) # pylint: disable=line-too-long
                 )
             )
-    if check is True:
+    if check is True: # pylint: disable=too-many-nested-blocks
         vscp_msg = {
             'class':        {'id': None,    'name': 'CLASS1.PROTOCOL'},
             'type':         {'id': None,    'name': 'EXTENDED_PAGE_READ'},
@@ -554,40 +560,42 @@ async def extended_page_read_register(nickname: int, page: int, register_id: int
             }
         max_response_messages = 1
         if number_of_regs is not None:
-            number_of_regs = int(min((0x100 - register_id), number_of_regs if 0 != number_of_regs else 0x100))
-            max_response_messages = int(((number_of_regs - 1) / 4) + 1) if 0 != number_of_regs else 0x40
+            number_of_regs = int(min((0x100 - register_id), number_of_regs if 0 != number_of_regs else 0x100)) # pylint: disable=line-too-long
+            max_response_messages = int(((number_of_regs - 1) / 4) + 1) if 0 != number_of_regs else 0x40 # pylint: disable=line-too-long
             vscp_msg['data'] += [number_of_regs]
         _message.send(vscp_msg)
         temp_result = {}
         all_data_received = False
         for _ in range(PROBE_RETRIES_LONG):
+            step = 1 / (1 + max_response_messages)
             if not has_parent:
-                step = 1 / (1 + max_response_messages)
                 progress = step
                 update_progress(progress)
             await asyncio.sleep(PROBE_SLEEP)
             while _message.available() > 0:
-                # pylint: disable=unsubscriptable-object
                 vscp_result = _message.pop_front()
                 try:
-                    check = (   (vscp_result['class']['name'] == vscp_msg['class']['name'])
-                            and (vscp_result['type']['name'] == 'EXTENDED_PAGE_RESPONSE')
-                            and (vscp_result['nickName'] == nickname)
-                            and (page == int.from_bytes(bytes(vscp_result['data'][1:3]), 'big'))
-                            )
+                    if vscp_result is not None:
+                        check = (   (vscp_result['class']['name'] == vscp_msg['class']['name'])
+                                and (vscp_result['type']['name'] == 'EXTENDED_PAGE_RESPONSE')
+                                and (vscp_result['nickName'] == nickname)
+                                and (page == int.from_bytes(bytes(vscp_result['data'][1:3]), 'big'))
+                                )
+                    else:
+                        check = False
                 except (ValueError, TypeError):
                     check = False
                 idx = 1
                 if check is True:
                     try:
-                        idx = int(vscp_result['data'][0])
-                        temp_result[idx] = vscp_result['data'][4:]
+                        if vscp_result is not None:
+                            idx = int(vscp_result['data'][0])
+                            temp_result[idx] = vscp_result['data'][4:]
                     except (ValueError, TypeError):
                         pass
                     all_data_received = len(temp_result) == max_response_messages
-                # pylint: enable=unsubscriptable-object
                 if not has_parent:
-                    progress = progress + step # type: ignore
+                    progress = progress + step
                     update_progress(progress)
                 if all_data_received is True:
                     break
@@ -601,10 +609,10 @@ async def extended_page_read_register(nickname: int, page: int, register_id: int
         _async_work = False
         _message.disable_feeder(True)
         update_progress(1.0)
-    return result # type: ignore
+    return result
 
 
-async def _firmware_enter_bootloader_mode(nickname: int, bootloader_type: int) -> dict:
+async def _firmware_enter_bootloader_mode(nickname: int, bootloader_type: int) -> tuple[int, int] | None: # pylint: disable=line-too-long
     """
     Commands a node to enter bootloader mode for firmware update.
 
@@ -618,53 +626,54 @@ async def _firmware_enter_bootloader_mode(nickname: int, bootloader_type: int) -
         dict: A tuple containing (flash_block_size, number_of_blocks) if successful, None otherwise.
     """
     result = None
-    try:
+    try: # pylint: disable=too-many-nested-blocks
         credentials = await extended_page_read_register(nickname, 0x00, 0x92, 2)
-        reg_0x92 = credentials[0]
-        reg_0x93 = credentials[1]
-        credentials = await extended_page_read_register(nickname, 0x00, 0xD0, 8)
-        vscp_msg = {
-            'class':        {'id': None,    'name': 'CLASS1.PROTOCOL'},
-            'type':         {'id': None,    'name': 'ENTER_BOOT_LOADER'},
-            'priority':     {'id': None,    'name': 'Lowest'},
-            'nickName':     _this_nickname,
-            'isHardCoded':  False,
-            'data':         [nickname,          bootloader_type,    credentials[0], credentials[3],
-                             credentials[5],    credentials[7],     reg_0x92,       reg_0x93
-                            ]
-            }
-        _message.send(vscp_msg)
-        stop = False
-        for _ in range(PROBE_RETRIES_LONG):
-            await asyncio.sleep(PROBE_SLEEP)
-            while _message.available() > 0:
-                # pylint: disable=unsubscriptable-object
-                vscp_result = _message.pop_front()
-                check = (   (vscp_result['class']['name'] == vscp_msg['class']['name'])
-                        and (vscp_result['nickName'] == nickname)
-                        )
-                if check is True:
-                    match vscp_result['type']['name']:
-                        case 'ACK_BOOT_LOADER':
-                            try:
-                                flash_block_size = int.from_bytes(bytes(vscp_result['data'][:4]), 'big')
-                                number_of_blocks = int.from_bytes(bytes(vscp_result['data'][-4:]), 'big')
-                                result = (flash_block_size, number_of_blocks)
-                            except ValueError:
-                                pass
-                            stop = True
-                        case 'NACK_BOOT_LOADER':
-                            stop = True
-                        case _:
-                            pass
+        if credentials is not None:
+            reg_0x92 = credentials[0]
+            reg_0x93 = credentials[1]
+            credentials = await extended_page_read_register(nickname, 0x00, 0xD0, 8)
+            vscp_msg = {
+                    'class':        {'id': None,    'name': 'CLASS1.PROTOCOL'},
+                    'type':         {'id': None,    'name': 'ENTER_BOOT_LOADER'},
+                    'priority':     {'id': None,    'name': 'Lowest'},
+                    'nickName':     _this_nickname,
+                    'isHardCoded':  False,
+                    }
+            if credentials is not None:
+                vscp_msg['data'] = [nickname,          bootloader_type,    credentials[0], credentials[3], # pylint: disable=line-too-long
+                                    credentials[5],    credentials[7],     reg_0x92,       reg_0x93]
+                _message.send(vscp_msg)
+            stop = False
+            for _ in range(PROBE_RETRIES_LONG):
+                await asyncio.sleep(PROBE_SLEEP)
+                while _message.available() > 0:
+                    vscp_result = _message.pop_front()
+                    if vscp_result is not None:
+                        check = (   (vscp_result['class']['name'] == vscp_msg['class']['name'])
+                                and (vscp_result['nickName'] == nickname)
+                                )
+                        if check is True:
+                            if vscp_result is not None:
+                                match vscp_result['type']['name']:
+                                    case 'ACK_BOOT_LOADER':
+                                        try:
+                                            flash_block_size = int.from_bytes(bytes(vscp_result['data'][:4]), 'big') # pylint: disable=line-too-long
+                                            number_of_blocks = int.from_bytes(bytes(vscp_result['data'][-4:]), 'big') # pylint: disable=line-too-long
+                                            result = (flash_block_size, number_of_blocks)
+                                        except ValueError:
+                                            pass
+                                        stop = True
+                                    case 'NACK_BOOT_LOADER':
+                                        stop = True
+                                    case _:
+                                        pass
+                                break
+                if stop is True:
+                    _message.flush()
                     break
-                # pylint: enable=unsubscriptable-object
-            if stop is True:
-                _message.flush()
-                break
     except (ValueError, TypeError):
         pass
-    return result # type: ignore
+    return result
 
 
 async def _firmware_send_start_data_block(nickname: int, block_id: int) -> bool:
@@ -692,23 +701,22 @@ async def _firmware_send_start_data_block(nickname: int, block_id: int) -> bool:
     for _ in range(PROBE_RETRIES_LONG):
         await asyncio.sleep(PROBE_SLEEP)
         while _message.available() > 0:
-            # pylint: disable=unsubscriptable-object
             vscp_result = _message.pop_front()
-            check = (   (vscp_result['class']['name'] == vscp_msg['class']['name'])
-                    and (vscp_result['nickName'] == nickname)
-                    )
-            if check is True:
-                match vscp_result['type']['name']:
-                    case 'START_BLOCK_ACK':
-                        result = True
-                        stop = True
-                    case 'START_BLOCK_NACK':
-                        stop = True
-                    case _:
-                        pass
-                if stop is True:
-                    break
-            # pylint: enable=unsubscriptable-object
+            if vscp_result is not None:
+                check = (   (vscp_result['class']['name'] == vscp_msg['class']['name'])
+                        and (vscp_result['nickName'] == nickname)
+                        )
+                if check is True:
+                    match vscp_result['type']['name']:
+                        case 'START_BLOCK_ACK':
+                            result = True
+                            stop = True
+                        case 'START_BLOCK_NACK':
+                            stop = True
+                        case _:
+                            pass
+                    if stop is True:
+                        break
         if stop is True:
             _message.flush()
             break
@@ -746,23 +754,22 @@ async def _firmware_send_data_chunk(nickname: int, chunk_gap: int, chunk: list) 
             norepeat = (idx + 1) >= PROBE_RETRIES_SHORT
             stop = False
             while _message.available() > 0:
-                # pylint: disable=unsubscriptable-object
                 vscp_result = _message.pop_front()
-                check = (   (vscp_result['class']['name'] == 'CLASS1.PROTOCOL')
-                        and (vscp_result['nickName'] == nickname)
-                        )
-                if check is True:
-                    match vscp_result['type']['name']:
-                        case 'BLOCK_CHUNK_ACK':
-                            norepeat = True
-                            stop = True
-                        case 'BLOCK_CHUNK_NACK':
-                            stop = True
-                        case _:
-                            pass
+                if vscp_result is not None:
+                    check = (   (vscp_result['class']['name'] == 'CLASS1.PROTOCOL')
+                            and (vscp_result['nickName'] == nickname)
+                            )
+                    if check is True:
+                        match vscp_result['type']['name']:
+                            case 'BLOCK_CHUNK_ACK':
+                                norepeat = True
+                                stop = True
+                            case 'BLOCK_CHUNK_NACK':
+                                stop = True
+                            case _:
+                                pass
                 if stop is True:
                     break
-            # pylint: enable=unsubscriptable-object
             if stop is True:
                 break
             await asyncio.sleep(PROBE_SLEEP)
@@ -772,7 +779,7 @@ async def _firmware_send_data_chunk(nickname: int, chunk_gap: int, chunk: list) 
     return result
 
 
-async def _firmware_send_data_block(nickname: int, chunk_gap: int, block: list, progress: float, progress_chunk: float) -> bool: # pylint: disable=too-many-locals
+async def _firmware_send_data_block(nickname: int, chunk_gap: int, block: list, progress: float, progress_chunk: float) -> bool: # pylint: disable=line-too-long, too-many-locals
     """
     Sends a full firmware block by splitting it into smaller chunks.
 
@@ -787,7 +794,7 @@ async def _firmware_send_data_block(nickname: int, chunk_gap: int, block: list, 
         bool: True if the entire block was successfully sent and verified, False otherwise.
     """
     result = False
-    block_crc = Calculator(Crc16.IBM_3740, True).checksum(bytes(block)) # type: ignore
+    block_crc = Calculator(Crc16.IBM_3740.value, True).checksum(bytes(block))
     chunks = int(len(block) / MAX_CAN_DLC)
     step = progress_chunk / chunks
     block_progress = progress
@@ -803,26 +810,25 @@ async def _firmware_send_data_block(nickname: int, chunk_gap: int, block: list, 
         for _ in range(PROBE_RETRIES_LONG):
             await asyncio.sleep(PROBE_SLEEP)
             while _message.available() > 0:
-                # pylint: disable=unsubscriptable-object
                 vscp_result = _message.pop_front()
-                check = (   (vscp_result['class']['name'] == 'CLASS1.PROTOCOL')
-                        and (vscp_result['nickName'] == nickname)
-                        )
-                if check is True:
-                    match vscp_result['type']['name']:
-                        case 'BLOCK_DATA_ACK':
-                            try:
-                                received_crc = int.from_bytes(bytes(vscp_result['data'][:2]), 'big')
-                            except ValueError:
-                                received_crc = None
-                            if isinstance(received_crc, int) and received_crc == block_crc:
-                                result = True
-                            stop = True
-                        case 'BLOCK_DATA_NACK':
-                            stop = True
-                        case _:
-                            pass
-                # pylint: enable=unsubscriptable-object
+                if vscp_result is not None:
+                    check = (   (vscp_result['class']['name'] == 'CLASS1.PROTOCOL')
+                            and (vscp_result['nickName'] == nickname)
+                            )
+                    if check is True:
+                        match vscp_result['type']['name']:
+                            case 'BLOCK_DATA_ACK':
+                                try:
+                                    received_crc = int.from_bytes(bytes(vscp_result['data'][:2]), 'big') # pylint: disable=line-too-long
+                                except ValueError:
+                                    received_crc = None
+                                if isinstance(received_crc, int) and received_crc == block_crc:
+                                    result = True
+                                stop = True
+                            case 'BLOCK_DATA_NACK':
+                                stop = True
+                            case _:
+                                pass
             if stop is True:
                 _message.flush()
                 break
@@ -854,26 +860,25 @@ async def _firmware_send_program_data_block(nickname: int, block_id: int) -> boo
     for _ in range(FIRMWARE_WRITE_ACK_CHECK_RETRIES):
         await asyncio.sleep(PROBE_SLEEP)
         while _message.available() > 0:
-            # pylint: disable=unsubscriptable-object
             vscp_result = _message.pop_front()
-            check = (   (vscp_result['class']['name'] == vscp_msg['class']['name'])
-                    and (vscp_result['nickName'] == nickname)
-                    )
-            if check is True:
-                match vscp_result['type']['name']:
-                    case 'PROGRAM_BLOCK_DATA_ACK':
-                        try:
-                            if int.from_bytes(bytes(vscp_result['data'][:4]), 'big') == block_id:
-                                result = True
+            if vscp_result is not None:
+                check = (   (vscp_result['class']['name'] == vscp_msg['class']['name'])
+                        and (vscp_result['nickName'] == nickname)
+                        )
+                if check is True:
+                    match vscp_result['type']['name']:
+                        case 'PROGRAM_BLOCK_DATA_ACK':
+                            try:
+                                if int.from_bytes(bytes(vscp_result['data'][:4]), 'big') == block_id: # pylint: disable=line-too-long
+                                    result = True
+                                    stop = True
+                            except ValueError:
+                                pass
+                        case 'PROGRAM_BLOCK_DATA_NACK':
+                            if int.from_bytes(bytes(vscp_result['data'][1:5]), 'big') == block_id:
                                 stop = True
-                        except ValueError:
+                        case _:
                             pass
-                    case 'PROGRAM_BLOCK_DATA_NACK':
-                        if int.from_bytes(bytes(vscp_result['data'][1:5]), 'big') == block_id:
-                            stop = True
-                    case _:
-                        pass
-            # pylint: enable=unsubscriptable-object
             if stop is True:
                 break
         if stop is True:
@@ -907,28 +912,27 @@ async def _firmware_activate_new_image(nickname: int, firmware_crc: int) -> bool
     for _ in range(FIRMWARE_WRITE_ACK_CHECK_RETRIES):
         await asyncio.sleep(PROBE_SLEEP)
         while _message.available() > 0:
-            # pylint: disable=unsubscriptable-object
             vscp_result = _message.pop_front()
-            check = (   (vscp_result['class']['name'] == vscp_msg['class']['name'])
-                    and (vscp_result['nickName'] == nickname)
-                    )
-            if check is True:
-                match vscp_result['type']['name']:
-                    case 'ACTIVATE_NEW_IMAGE_ACK':
-                        result = True
-                        stop = True
-                    case 'ACTIVATE_NEW_IMAGE_NACK':
-                        stop = True
-                    case 'NEW_NODE_ONLINE':
-                        try:
-                            if vscp_result['data'][0] == nickname:
-                                result = True
-                        except TypeError:
+            if vscp_result is not None:
+                check = (   (vscp_result['class']['name'] == vscp_msg['class']['name'])
+                        and (vscp_result['nickName'] == nickname)
+                        )
+                if check is True:
+                    match vscp_result['type']['name']:
+                        case 'ACTIVATE_NEW_IMAGE_ACK':
+                            result = True
+                            stop = True
+                        case 'ACTIVATE_NEW_IMAGE_NACK':
+                            stop = True
+                        case 'NEW_NODE_ONLINE':
+                            try:
+                                if vscp_result['data'][0] == nickname:
+                                    result = True
+                            except TypeError:
+                                pass
+                            stop = True
+                        case _:
                             pass
-                        stop = True
-                    case _:
-                        pass
-            # pylint: enable=unsubscriptable-object
             if stop is True:
                 break
         if stop is True:
@@ -967,20 +971,20 @@ async def firmware_upload(nickname: int, firmware: list) -> bool: # pylint: disa
             number_of_blocks = device_block_params[1]
             block_gap = len(firmware) % flash_block_size
             if 0 != block_gap:
-                firmware.extend(FIRMWARE_FLASH_ERASED_VALUE for _ in range(flash_block_size - block_gap))
-            firmware_crc = Calculator(Crc16.IBM_3740, True).checksum(bytes(firmware)) # type: ignore
+                firmware.extend(FIRMWARE_FLASH_ERASED_VALUE for _ in range(flash_block_size - block_gap)) # pylint: disable=line-too-long
+            firmware_crc = Calculator(Crc16.IBM_3740.value, True).checksum(bytes(firmware))
             blocks_to_program = int(len(firmware) / flash_block_size)
             if blocks_to_program <= number_of_blocks:
                 step = 0.96 / blocks_to_program
                 success = False
-                for idx, block in enumerate([firmware[i:i + flash_block_size] for i in range(0, len(firmware), flash_block_size)]):
+                for idx, block in enumerate([firmware[i:i + flash_block_size] for i in range(0, len(firmware), flash_block_size)]): # pylint: disable=line-too-long
                     retry = 0
                     while retry < FIRMWARE_BLOCK_WRITE_RETRIES:
                         chunk_gap = PROBE_SLEEP * (1 << retry)
                         retry += 1
                         success = await _firmware_send_start_data_block(nickname, idx)
                         if success is True:
-                            success = await _firmware_send_data_block(nickname, chunk_gap, block, progress, step) # type: ignore
+                            success = await _firmware_send_data_block(nickname, int(chunk_gap), block, progress, step) # pylint: disable=line-too-long
                         else:
                             await asyncio.sleep(BLOCK_WRITE_GAP)
                         if success is True:

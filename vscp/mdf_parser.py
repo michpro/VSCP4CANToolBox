@@ -4,9 +4,14 @@ Module Description File (MDF) Parser.
 This module provides the MdfParser class to parse VSCP Module Description Files
 in both XML and JSON formats. It extracts module information, register definitions,
 and other device-specific data.
+
+@file mdf_parser.py
+@copyright SPDX-FileCopyrightText: Copyright 2024-2026 by Michal Protasowicki
+@license SPDX-License-Identifier: MIT
 """
 
-import pprint # TODO remove
+# import pprint # TODO remove
+from typing import Any
 import re
 import json
 import xmltodict
@@ -280,12 +285,13 @@ class MdfParser:
         return result
 
 
-    def _get_eng_text(self, item: any, last: bool) -> str:
+    def _get_eng_text(self, item: Any, last: bool) -> str:
         result = ''
         if isinstance(item, dict):
             try:
                 lang = ['en', 'eng', 'gb']
                 found = False
+                val = ''
                 for key in lang:
                     if key in item:
                         val = item[key]

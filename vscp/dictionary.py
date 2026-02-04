@@ -1,12 +1,15 @@
-# pylint: disable=too-many-lines, line-too-long
-
 """
 VSCP Dictionary Module.
 
 This module provides the Dictionary class which acts as a lookup and translation
 layer for VSCP (Very Simple Control Protocol) classes, types, priorities, and data formats.
 It contains extensive definitions of VSCP Class 1 protocol definitions.
+
+@file dictionary.py
+@copyright SPDX-FileCopyrightText: Copyright 2024-2026 by Michal Protasowicki
+@license SPDX-License-Identifier: MIT
 """
+# pylint: disable=too-many-lines, line-too-long
 
 
 import os
@@ -32,7 +35,6 @@ class Dictionary:
 
     def __init__(self) -> None:
         """Initializes the Dictionary instance."""
-        pass
 
 
     def get(self) -> list:
@@ -380,7 +382,7 @@ class Dictionary:
         result = '00:00:00.000'
         if 5 == len(data):
             try:
-                hour = int(data[0], 'big', signed=False)
+                hour = int(data[0])
                 minute = int(data[1])
                 second = int(data[2])
                 millisecond = int(int.from_bytes(data[3:], 'big', signed=False))
@@ -553,7 +555,7 @@ class Dictionary:
         """Converts button event flags to string."""
         result = ''
         try:
-            val = int(data) & 0xFF
+            val = int(data[0]) & 0xFF
         except ValueError:
             val = 0
         if val & 0x02:

@@ -4,11 +4,16 @@ VSCP Message Module.
 This module provides the Message class for handling VSCP (Very Simple Control Protocol)
 messages over CAN. It includes utilities for parsing CAN IDs into VSCP attributes,
 preparing CAN IDs from VSCP message structures, and managing a simple message queue.
+
+@file message.py
+@copyright SPDX-FileCopyrightText: Copyright 2024-2026 by Michal Protasowicki
+@license SPDX-License-Identifier: MIT
 """
 
 # pylint: disable=line-too-long
 
 
+from typing import cast
 import numpy as np
 import can
 import phy
@@ -56,7 +61,6 @@ class Message:
 
     def __init__(self) -> None:
         """Initializes the Message instance."""
-        pass
 
 
     def parse_id(self, can_id: np.uint32) -> dict:
@@ -105,7 +109,7 @@ class Message:
         Returns:
             np.uint32: The constructed 29-bit CAN identifier, or 0 if an error occurs.
         """
-        result: np.uint32 = 0
+        result: np.uint32 = cast(np.uint32, 0)
         try:
             vscp_class  = dictionary.class_id(msg['class']['name']) if msg['class']['name'] is not None else msg['class']['id']
             vscp_type   = dictionary.type_id(vscp_class, msg['type']['name']) if msg['type']['name'] is not None else msg['type']['id']
@@ -169,7 +173,7 @@ class Message:
         _messages.append(msg)
 
 
-    def pop_back(self) -> dict:
+    def pop_back(self) -> dict | None:
         """
         Removes and returns the last message from the queue.
 
@@ -179,7 +183,7 @@ class Message:
         return _messages.pop(-1) if len(_messages) > 0 else None
 
 
-    def pop_front(self) -> dict:
+    def pop_front(self) -> dict | None:
         """
         Removes and returns the first message from the queue.
 
@@ -199,7 +203,7 @@ class Message:
         return _messages
 
 
-    def peek_front(self) -> dict:
+    def peek_front(self) -> dict | None:
         """
         Returns the first message in the queue without removing it.
 
@@ -234,8 +238,8 @@ class Message:
         vscp_msg_id = self.prepare_id(msg)
         try:
             bus = phy.driver.bus
-            if bus.state == can.bus.BusState.ACTIVE:
-                bus.send(can.Message(arbitration_id=vscp_msg_id, is_extended_id=True, data=msg['data']))
+            if bus is not None and bus.state == can.bus.BusState.ACTIVE:
+                bus.send(can.Message(arbitration_id=int(vscp_msg_id), is_extended_id=True, data=msg['data']))
             result = True
         except Exception: # pylint: disable=broad-exception-caught
             pass

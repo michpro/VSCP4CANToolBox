@@ -2,6 +2,10 @@
 Utility functions module.
 
 Provides general-purpose helper functions used across the VSCP package.
+
+@file utils.py
+@copyright SPDX-FileCopyrightText: Copyright 2024-2026 by Michal Protasowicki
+@license SPDX-License-Identifier: MIT
 """
 
 # pylint: disable=line-too-long
