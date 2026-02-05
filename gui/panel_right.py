@@ -8,11 +8,11 @@ of the VSCP message logger (treeview) and the detailed event information display
 @copyright SPDX-FileCopyrightText: Copyright 2024-2026 by Michal Protasowicki
 @license SPDX-License-Identifier: MIT
 """
-# pylint: disable=line-too-long, too-many-ancestors
 
 
 import os
 import csv
+from typing import Any, cast
 import customtkinter as ctk
 from CTkMessagebox import CTkMessagebox
 import vscp
@@ -22,7 +22,7 @@ from .common import add_event_info_handle, event_info_handle
 from .popup import CTkFloatingWindow
 
 
-class Messages(ctk.CTkFrame):
+class Messages(ctk.CTkFrame): # pylint: disable=too-many-ancestors
     """
     Widget displaying VSCP messages in a treeview.
 
@@ -32,6 +32,7 @@ class Messages(ctk.CTkFrame):
     """
 
     def __init__(self, parent):
+        # pylint: disable=line-too-long
         """
         Initialize the Messages widget.
 
@@ -67,6 +68,7 @@ class Messages(ctk.CTkFrame):
                                                   text="Save log to file", command=self._save_log)
         self.dropdown_bt_save_log.pack(expand=True, fill="x", padx=0, pady=0)
         vscp.add_node_id_observer(self.update_node_id)
+        # pylint: enable=line-too-long
 
 
     def _parse_msg_data(self, _):
@@ -80,7 +82,9 @@ class Messages(ctk.CTkFrame):
         selected_rows = self.messages.treeview.selection()
         if 1 == len(selected_rows):
             values = self.messages.treeview.item(selected_rows[0])['values']
-        event_info_handle().display(values) # type: ignore
+        handle = event_info_handle()
+        if hasattr(handle, 'display'):
+            cast(Any, handle).display(values)
 
 
     def insert(self, row_data):
@@ -142,7 +146,7 @@ class Messages(ctk.CTkFrame):
         """
         filetypes = [('CSV Log File', '*.csv')]
         fname = ctk.filedialog.asksaveasfilename(confirmoverwrite=True, initialfile='vscp_log',
-                                                 filetypes=filetypes, defaultextension=filetypes) # type: ignore
+                                                 filetypes=filetypes, defaultextension='.csv')
         if fname:
             with open(fname, "w", newline='', encoding='UTF-8') as log_file:
                 csvwriter = csv.writer(log_file, delimiter=',')
@@ -175,7 +179,7 @@ class Messages(ctk.CTkFrame):
             menu.grab_release()
 
 
-class EventInfo(ctk.CTkFrame): # pylint: disable=too-few-public-methods
+class EventInfo(ctk.CTkFrame): # pylint: disable=too-few-public-methods, too-many-ancestors
     """
     Widget for displaying detailed information about a selected VSCP event.
 
@@ -184,6 +188,7 @@ class EventInfo(ctk.CTkFrame): # pylint: disable=too-few-public-methods
     """
 
     def __init__(self, parent):
+        # pylint: disable=line-too-long
         """
         Initialize the EventInfo widget.
 
@@ -194,13 +199,16 @@ class EventInfo(ctk.CTkFrame): # pylint: disable=too-few-public-methods
         super().__init__(self.parent)
 
         font = ctk.CTkFont(family='Ubuntu Mono', size=16)
-        self.event_info = ctk.CTkTextbox(self.parent, font=font, border_spacing=1, width=480, fg_color=self._fg_color) # type: ignore
-        self.event_info.pack(padx=(5, 0), pady=(5, 5), side='top', anchor='nw', fill='y', expand=False) # type: ignore
-        self.event_info.bind("<Button-1>", 'break') # type: ignore
-        self.event_info.configure(state='disabled') # type: ignore
+        temp_fg_color = tuple(self._fg_color) if isinstance(self._fg_color, list) else self._fg_color
+        self.event_info_box = ctk.CTkTextbox(self.parent, font=font, border_spacing=1, width=480, fg_color=temp_fg_color)
+        self.event_info_box.pack(padx=(5, 0), pady=(5, 5), side='top', anchor='nw', fill='y', expand=False)
+        self.event_info_box.bind("<Button-1>", lambda e: 'break')
+        self.event_info_box.configure(state='disabled')
+        # pylint: enable=line-too-long
 
 
     def display(self, data: list) -> None:
+        # pylint: disable=line-too-long
         """
         Decode and display the provided event data.
 
@@ -210,8 +218,9 @@ class EventInfo(ctk.CTkFrame): # pylint: disable=too-few-public-methods
         Args:
             data: A list containing raw message fields (timestamp, dir, id, priority, class, type, data).
         """
-        self.event_info.configure(state='normal') # type: ignore
-        self.event_info.delete('1.0', 'end') # type: ignore
+        # pylint: enable=line-too-long
+        self.event_info_box.configure(state='normal')
+        self.event_info_box.delete('1.0', 'end')
         if 0 != len(data):
             descr_len = 18
             class_id = dictionary.class_id(data[4])
@@ -220,14 +229,14 @@ class EventInfo(ctk.CTkFrame): # pylint: disable=too-few-public-methods
             info = dictionary.parse_data(class_id, type_id, dlc)
             val = ''
             for idx, item in enumerate(info):
-                val += item[0].ljust(descr_len)[:descr_len] if 0 != idx else item[0] + (os.linesep * 2)
+                val += item[0].ljust(descr_len)[:descr_len] if 0 != idx else item[0] + (os.linesep * 2) # pylint: disable=line-too-long
                 if 0 != idx:
                     val += item[1] + os.linesep
-            self.event_info.insert('end', val) # type: ignore
-        self.event_info.configure(state='disabled') # type: ignore
+            self.event_info_box.insert('end', val)
+        self.event_info_box.configure(state='disabled')
 
 
-class RightPanel(ctk.CTkFrame): # pylint: disable=too-few-public-methods
+class RightPanel(ctk.CTkFrame): # pylint: disable=too-few-public-methods, too-many-ancestors
     """
     Main container for the right panel of the application.
 
@@ -250,7 +259,7 @@ class RightPanel(ctk.CTkFrame): # pylint: disable=too-few-public-methods
         self.messages = Messages(self.widget)
 
         self.info_panel = ctk.CTkFrame(self.widget, height=150)
-        self.info_panel.pack(padx=(2, 6), pady=(1, 5), side='top', anchor='s', fill='both', expand=False)
+        self.info_panel.pack(padx=(2, 6), pady=(1, 5), side='top', anchor='s', fill='both', expand=False) # pylint: disable=line-too-long
 
         self.info = EventInfo(self.info_panel)
         add_event_info_handle(self.info)

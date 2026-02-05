@@ -10,8 +10,8 @@ and performing firmware updates over CAN.
 @copyright SPDX-FileCopyrightText: Copyright 2024-2026 by Michal Protasowicki
 @license SPDX-License-Identifier: MIT
 """
-
 # pylint: disable=too-many-lines
+
 
 import time
 import datetime
@@ -456,71 +456,162 @@ async def set_nickname(old_nickname: int, new_nickname: int) -> bool:
     return result
 
 
-# TODO add progress
-async def extended_page_write_register(nickname: int, page: int, register_id: int, reg_vals: list) -> bool: # pylint: disable=line-too-long
+async def _collect_extended_page_responses(nickname: int, page: int, expected_count: int, update_progress_callback=None) -> dict: # pylint: disable=line-too-long
+    # pylint: disable=line-too-long
+    """
+    Collects EXTENDED_PAGE_RESPONSE messages from the device.
+
+    Args:
+        nickname (int): Target node nickname.
+        page (int): Expected register page.
+        expected_count (int): Number of expected response packets.
+        update_progress_callback (callable, optional): Function called to update progress (accepts float).
+
+    Returns:
+        dict: Dictionary with indexes as keys and data as values.
+    """
+    # pylint: enable=line-too-long
+    temp_result = {}
+    all_data_received = False
+
+    # Progress step for one iteration of the wait loop
+    step = 0
+    if update_progress_callback:
+        # Assume this function takes a certain slice of time, e.g., PROBE_RETRIES_LONG iterations
+        step = 1.0 / PROBE_RETRIES_LONG
+
+    for _ in range(PROBE_RETRIES_LONG):
+        await asyncio.sleep(PROBE_SLEEP)
+        while _message.available() > 0:
+            vscp_result = _message.pop_front()
+            try:
+                if vscp_result is not None:
+                    check = (   (vscp_result['class']['name'] == 'CLASS1.PROTOCOL')
+                            and (vscp_result['type']['name'] == 'EXTENDED_PAGE_RESPONSE')
+                            and (vscp_result['nickName'] == nickname)
+                            and (page == int.from_bytes(bytes(vscp_result['data'][1:3]), 'big'))
+                            )
+                else:
+                    check = False
+            except (ValueError, TypeError):
+                check = False
+
+            if check is True:
+                try:
+                    if vscp_result is not None:
+                        idx = int(vscp_result['data'][0])
+                        temp_result[idx] = vscp_result['data'][4:]
+                except (ValueError, TypeError):
+                    pass
+                all_data_received = len(temp_result) == expected_count
+
+            if all_data_received is True:
+                break
+
+        if update_progress_callback:
+            update_progress_callback(step)
+
+        if all_data_received is True:
+            break
+
+    return temp_result
+
+
+async def extended_page_write_register(nickname: int, page: int, register_id: int, reg_vals: list) -> list | None: # pylint: disable=line-too-long, too-many-locals
+    # pylint: disable=line-too-long
     """
     Writes data to registers using the Extended Page Protocol.
+    Supports writing up to 256 bytes by splitting into multiple messages.
 
     Args:
         nickname (int): The target node.
         page (int): The register page (16-bit).
         register_id (int): The starting register ID (8-bit).
-        reg_vals (list): A list of byte values to write.
+        reg_vals (list): A list of byte values to write (max 256).
 
     Returns:
-        bool: True if the write was verified by response, False otherwise.
+        list: A list of bytes read back from the registers (response verification), or None if failed.
     """
+    # pylint: disable=line-too-long
     global _async_work # pylint: disable=global-statement
-    result = False
-    if _async_work is False: # pylint: disable=too-many-nested-blocks
+    has_parent = _async_work
+    progress = 0.0
+    if _async_work is False:
         _async_work = True
         _message.enable_feeder()
-        reg_vals = [numb for numb in reg_vals if isinstance(numb, int) and 0 <= numb <= 0xFF][:4]
-        check = (   (max(min(0xFFFF, page), 0) == page)
-                and (max(min(0xFF, register_id), 0) == register_id)
-                )
-        if check is True:
+        update_progress(progress)
+
+    result = []
+
+    reg_vals = [numb for numb in reg_vals if isinstance(numb, int) and 0 <= numb <= 0xFF]
+
+    # Limit to the end of the page (limit to max 256 or less depending on start address)
+    safe_reg_id = max(min(0xFF, register_id), 0)
+    limit = 0x100 - safe_reg_id
+    reg_vals = reg_vals[:limit]
+
+    check = (   (max(min(0xFFFF, page), 0) == page)
+            and (max(min(0xFF, register_id), 0) == register_id)
+            and (len(reg_vals) > 0)
+            )
+
+    if check is True:
+        chunks = [reg_vals[i:i + 4] for i in range(0, len(reg_vals), 4)]
+        total_chunks = len(chunks)
+        chunk_progress_step = 1.0 / total_chunks if total_chunks > 0 else 1.0
+
+        current_reg_id = register_id
+
+        for i, chunk in enumerate(chunks):
             vscp_msg = {
                 'class':        {'id': None,    'name': 'CLASS1.PROTOCOL'},
                 'type':         {'id': None,    'name': 'EXTENDED_PAGE_WRITE'},
                 'priority':     {'id': None,    'name': 'Lower'},
                 'nickName':     _this_nickname,
                 'isHardCoded':  False,
-                'data':         [nickname] + list(page.to_bytes(2, 'big')) + [register_id] + reg_vals # pylint: disable=line-too-long
-                }
+                'data':         [nickname] + list(page.to_bytes(2, 'big')) + [current_reg_id] + chunk
+            }
             _message.send(vscp_msg)
-            for _ in range(PROBE_RETRIES_LONG):
-                await asyncio.sleep(PROBE_SLEEP)
-                while _message.available() > 0:
-                    vscp_result = _message.pop_front()
-                    try:
-                        if vscp_result is not None:
-                            check = (   (vscp_result['class']['name'] == vscp_msg['class']['name'])
-                                    and (vscp_result['type']['name'] == 'EXTENDED_PAGE_RESPONSE')
-                                    and (vscp_result['nickName'] == nickname)
-                                    and (page == int.from_bytes(bytes(vscp_result['data'][1:3]), 'big')) # pylint: disable=line-too-long
-                                    )
-                        else:
-                            check = False
-                    except (ValueError, TypeError):
-                        check = False
-                    if check is True:
-                        temp_result = []
-                        try:
-                            if vscp_result is not None:
-                                temp_result = vscp_result['data'][4:]
-                        except (ValueError, TypeError):
-                            pass
-                        result = reg_vals == temp_result
-                        break
-                if check is True:
-                    break
-        _message.disable_feeder(True)
+
+            def sub_progress_updater(step_val):
+                nonlocal progress
+                if not has_parent:
+                    # step_val is a small value from the retry loop, scale it to the chunk size
+                    scaled_step = step_val * chunk_progress_step
+                    progress += scaled_step
+                    update_progress(min(progress, 1.0))
+
+            # Expect exactly 1 response packet for each write request
+            responses = await _collect_extended_page_responses(nickname, page, 1, sub_progress_updater)
+
+            # Retrieve data from index 0 (usually the write response has index 0 or matches the query index)
+            # For EXTENDED_PAGE_WRITE, the response is usually not sequenced like in read,
+            # so we check available keys.
+            if responses:
+                for key in sorted(responses.keys()):
+                    result.extend(responses[key])
+            else:
+                # No response - error, aborting
+                result = None
+                break
+
+            # Update register ID for the next loop (wrap around 255)
+            current_reg_id = (current_reg_id + len(chunk)) & 0xFF
+
+            # Align progress after chunk completion
+            if not has_parent:
+                progress = (i + 1) * chunk_progress_step
+                update_progress(progress)
+
+    if not has_parent:
         _async_work = False
+        _message.disable_feeder(True)
+        update_progress(1.0)
+
     return result
 
 
-async def extended_page_read_register(nickname: int, page: int, register_id: int, number_of_regs: int | None = None) -> list | None: # pylint: disable=line-too-long, too-many-branches, too-many-statements
+async def extended_page_read_register(nickname: int, page: int, register_id: int, number_of_regs: int | None = None) -> list | None: # pylint: disable=line-too-long
     # pylint: disable=line-too-long
     """
     Reads data from registers using the Extended Page Protocol.
@@ -530,6 +621,7 @@ async def extended_page_read_register(nickname: int, page: int, register_id: int
         page (int): The register page (16-bit).
         register_id (int): The starting register ID (8-bit).
         number_of_regs (int, optional): Number of registers to read. Defaults to reading until end of page.
+                                        0 means read 256 registers.
 
     Returns:
         list: A list of bytes read from the registers, or None if failed.
@@ -549,7 +641,7 @@ async def extended_page_read_register(nickname: int, page: int, register_id: int
                  or (number_of_regs is not None and (max(min(0xFF, number_of_regs), 0) == number_of_regs)) # pylint: disable=line-too-long
                 )
             )
-    if check is True: # pylint: disable=too-many-nested-blocks
+    if check is True:
         vscp_msg = {
             'class':        {'id': None,    'name': 'CLASS1.PROTOCOL'},
             'type':         {'id': None,    'name': 'EXTENDED_PAGE_READ'},
@@ -558,53 +650,41 @@ async def extended_page_read_register(nickname: int, page: int, register_id: int
             'isHardCoded':  False,
             'data':         [nickname] + list(page.to_bytes(2, 'big')) + [register_id]
             }
+
         max_response_messages = 1
         if number_of_regs is not None:
-            number_of_regs = int(min((0x100 - register_id), number_of_regs if 0 != number_of_regs else 0x100)) # pylint: disable=line-too-long
-            max_response_messages = int(((number_of_regs - 1) / 4) + 1) if 0 != number_of_regs else 0x40 # pylint: disable=line-too-long
-            vscp_msg['data'] += [number_of_regs]
+            # 0 means 256 registers (0x100)
+            count = number_of_regs if number_of_regs != 0 else 0x100
+            # Limit to the end of the page
+            count = int(min((0x100 - register_id), count))
+
+            # Calculate the number of expected packets (4 bytes per packet)
+            max_response_messages = int(((count - 1) / 4) + 1)
+            vscp_msg['data'] += [number_of_regs] # Sending 0 in the command means 256
+
         _message.send(vscp_msg)
-        temp_result = {}
-        all_data_received = False
-        for _ in range(PROBE_RETRIES_LONG):
-            step = 1 / (1 + max_response_messages)
+
+        def sub_progress_updater(step_val):
+            nonlocal progress
             if not has_parent:
-                progress = step
-                update_progress(progress)
-            await asyncio.sleep(PROBE_SLEEP)
-            while _message.available() > 0:
-                vscp_result = _message.pop_front()
-                try:
-                    if vscp_result is not None:
-                        check = (   (vscp_result['class']['name'] == vscp_msg['class']['name'])
-                                and (vscp_result['type']['name'] == 'EXTENDED_PAGE_RESPONSE')
-                                and (vscp_result['nickName'] == nickname)
-                                and (page == int.from_bytes(bytes(vscp_result['data'][1:3]), 'big'))
-                                )
-                    else:
-                        check = False
-                except (ValueError, TypeError):
-                    check = False
-                idx = 1
-                if check is True:
-                    try:
-                        if vscp_result is not None:
-                            idx = int(vscp_result['data'][0])
-                            temp_result[idx] = vscp_result['data'][4:]
-                    except (ValueError, TypeError):
-                        pass
-                    all_data_received = len(temp_result) == max_response_messages
-                if not has_parent:
-                    progress = progress + step
-                    update_progress(progress)
-                if all_data_received is True:
-                    break
-            if all_data_received is True:
-                break
-        if all_data_received is True:
+                # Scale step to fit the progress bar logic
+                # In the original code, progress was incremented by step in each loop
+                progress += step_val
+                update_progress(min(progress, 1.0))
+
+        temp_result = await _collect_extended_page_responses(
+            nickname,
+            page,
+            max_response_messages,
+            sub_progress_updater
+        )
+
+        if len(temp_result) == max_response_messages:
             result = []
             for idx in range(max_response_messages):
-                result += temp_result[idx]
+                if idx in temp_result:
+                    result += temp_result[idx]
+
     if not has_parent:
         _async_work = False
         _message.disable_feeder(True)
@@ -994,7 +1074,7 @@ async def firmware_upload(nickname: int, firmware: list) -> bool: # pylint: disa
                     progress = progress + step
                     update_progress(progress)
                     if success is False:
-                        break #Fail to program firmware
+                        break
                 update_progress(0.98)
                 if success is True:
                     result = await _firmware_activate_new_image(nickname, firmware_crc)

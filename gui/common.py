@@ -10,8 +10,9 @@ a local dictionary of node information.
 @copyright SPDX-FileCopyrightText: Copyright 2024-2026 by Michal Protasowicki
 @license SPDX-License-Identifier: MIT
 """
-
 # pylint: disable=line-too-long
+
+from typing import Any
 
 
 _set_scan_widget_state_cb: object = None
@@ -110,18 +111,18 @@ def event_info_handle() -> object:
     return _event_info_handle
 
 
-def set_node_info(key: int, value: any) -> None: # type: ignore
+def set_node_info(key: int, value: Any) -> None:
     """
     Updates or adds information for a specific node in the local cache.
 
     Args:
         key (int): The node ID (nickname).
-        value (any): The node information structure.
+        value (Any): The node information structure.
     """
     _nodes[key] = value
 
 
-def get_node_info(key) -> any: # type: ignore
+def get_node_info(key) -> Any:
     """
     Retrieves information for a specific node from the local cache.
 
@@ -129,7 +130,7 @@ def get_node_info(key) -> any: # type: ignore
         key (int): The node ID (nickname).
 
     Returns:
-        any: The node information structure, or None if not found.
+        Any: The node information structure, or None if not found.
     """
     return _nodes.get(key, None)
 

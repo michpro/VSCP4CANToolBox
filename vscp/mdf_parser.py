@@ -76,7 +76,7 @@ class MdfParser:
         Extracts a variable value, potentially handling language selection.
 
         Args:
-            lang (str): The language code (not currently used in logic but reserved).
+            lang (str): The language code key to retrieve if var is a dictionary.
             var: The variable to parse (dict or value).
 
         Returns:
@@ -144,7 +144,7 @@ class MdfParser:
         return result
 
 
-    def get_registers_info(self) -> dict:
+    def get_registers_info(self) -> dict: # pylint: disable=too-many-locals
         """
         Constructs a complete map of device registers.
 
@@ -156,7 +156,8 @@ class MdfParser:
         """
         result = self._get_standard_registers()
         data = self._parse_registers_data()
-        # pp = pprint.PrettyPrinter(indent=2, width=160) # TODO remove
+        # TODO remove
+        # pp = pprint.PrettyPrinter(indent=2, width=160)
         # pp.pprint(data)
         for item in data: # pylint: disable=too-many-nested-blocks
             if 'page' in item:
@@ -166,6 +167,11 @@ class MdfParser:
                     if 0x80 > offset:
                         reg_type = item.get('type', 'std')
                         span = int(str(item.get('span', '1')), 0)
+
+                        # Added retrieval of min and max values
+                        min_val = item.get('min', None)
+                        max_val = item.get('max', None)
+
                         record = {
                             'access':       self._normalize_access_value(item['access']), # pylint: disable=line-too-long # TODO dmatrix fail
                             'value':        f"0x{max(min(0xFF, int(str(item.get('default', '0xFF')), 0)), 0):02X}", # pylint: disable=line-too-long
@@ -175,6 +181,13 @@ class MdfParser:
                             'type':         reg_type,
                             'span':         span,
                         }
+
+                        # Only add min/max to the record if they exist in the MDF
+                        if min_val is not None:
+                            record['min'] = min_val
+                        if max_val is not None:
+                            record['max'] = max_val
+
                         fg = item.get('fgcolor', 'invalid')
                         bg = item.get('bgcolor', 'invalid')
                         valid_fg = self._isrgbcolor(fg)

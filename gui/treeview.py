@@ -8,11 +8,12 @@ CustomTkinter integration (scrollbars).
 @copyright SPDX-FileCopyrightText: Copyright 2024-2026 by Michal Protasowicki
 @license SPDX-License-Identifier: MIT
 """
-# pylint: disable=line-too-long, too-many-ancestors, too-many-instance-attributes, too-many-positional-arguments
+
 
 import os
 import string
 import random
+from typing import Any, cast
 from tkinter import ttk
 import customtkinter as ctk
 from PIL import Image, ImageTk
@@ -20,6 +21,7 @@ from PIL import Image, ImageTk
 CURRENT_PATH = os.path.dirname(os.path.realpath(__file__))
 ICON_DIR = os.path.join(CURRENT_PATH, 'icons')
 ICON_PATH = os.path.join(ICON_DIR, 'arrow.png')
+# pylint: disable=line-too-long
 # {
 #     # 'close': (os.path.join(ICON_DIR, 'close_black.png'), os.path.join(ICON_DIR, 'close_white.png')),
 #     # 'images': list(os.path.join(ICON_DIR, f'image{i}.jpg') for i in range(1, 4)),
@@ -36,13 +38,15 @@ ICON_PATH = os.path.join(ICON_DIR, 'arrow.png')
 #     'arrow': os.path.join(ICON_DIR, 'arrow.png'),
 #     # 'image': os.path.join(ICON_DIR, 'image.png'),
 # }
+# pylint: enable=line-too-long
 
-class CTkTreeview(ctk.CTkFrame):
+class CTkTreeview(ctk.CTkFrame): # pylint: disable=too-many-ancestors, too-many-instance-attributes
     """
     Custom Treeview widget with integrated scrollbars and custom styles.
     """
 
-    def __init__(self, master: any, header=None, items=[], xscroll=True, yscroll=True): # type: ignore # pylint: disable=dangerous-default-value, too-many-arguments, too-many-statements
+    def __init__(self, master: Any, header=None, items=[], xscroll=True, yscroll=True): # pylint: disable=dangerous-default-value, too-many-arguments, too-many-statements
+        # pylint: disable=line-too-long
         """
         Initialize the CTkTreeview.
 
@@ -54,7 +58,7 @@ class CTkTreeview(ctk.CTkFrame):
             yscroll: Boolean to enable vertical scrollbar.
         """
         self.parent = master
-        self.header = header
+        self.header = header if header is not None else []
         self.items = items
         self.xscroll = xscroll
         self.yscroll = yscroll
@@ -62,6 +66,7 @@ class CTkTreeview(ctk.CTkFrame):
         self.editable_columns = None  # List of editable column keys
         self.edit_callback = None # Callback function for validation
         self.permission_callback = None # Callback function for edit permission
+        self.input_validation = None # Callback for Entry keystroke validation
         self._hidden_items = [] # List to store hidden items: (item_id, parent_id, index)
         self._modified_cells = set() # Set to store (item_id, column_key) of modified cells
         super().__init__(self.parent)
@@ -73,19 +78,20 @@ class CTkTreeview(ctk.CTkFrame):
         self.tree_style = ttk.Style(self)
         self.tree_style.theme_use('default')
 
+        transparent = cast(int, (0, 0, 0, 0))
         # Robust image loading: create transparent placeholder if file missing
         try:
             self.im_open = Image.open(ICON_PATH)
         except (FileNotFoundError, OSError):
-            # Fallback: create a simple 15x15 transparent image or a colored square
-            self.im_open = Image.new('RGBA', (15, 15), (0, 0, 0, 0)) # Transparent # type: ignore
+            # Fallback: create a simple 15x15 transparent image
+            self.im_open = Image.new('RGBA', (15, 15), transparent)
             # Optional: Draw a simple shape if you want visibility without file
             # from PIL import ImageDraw
             # draw = ImageDraw.Draw(self.im_open)
             # draw.polygon([(0,0), (0,15), (15,7)], fill="gray")
 
         self.im_close = self.im_open.rotate(90)
-        self.im_empty = Image.new('RGBA', (15, 15), '#00000000') # type: ignore
+        self.im_empty = Image.new('RGBA', (15, 15), transparent)
 
         self.img_open = ImageTk.PhotoImage(self.im_open, name='img_open', size=(15, 15))
         self.img_close = ImageTk.PhotoImage(self.im_close, name='img_close', size=(15, 15))
@@ -133,15 +139,16 @@ class CTkTreeview(ctk.CTkFrame):
         if self.col_keys is not None:
             self.treeview['columns'] = self.col_keys
             for idx, item in enumerate(self.treeview['columns']):
-                anchor = self.header[idx + 1][4] # type: ignore
-                self.treeview.heading(column=f'{item}', text=f'{self.header[idx + 1][1]}', anchor=anchor) # type: ignore
-                w = self.header[idx + 1][2] # type: ignore
-                mw = self.header[idx + 1][3] # type: ignore
-                anchor = self.header[idx + 1][5] # type: ignore
+                anchor = self.header[idx + 1][4]
+                self.treeview.heading(column=f'{item}', text=f'{self.header[idx + 1][1]}', anchor=anchor)
+                w = self.header[idx + 1][2]
+                mw = self.header[idx + 1][3]
+                anchor = self.header[idx + 1][5]
                 self.treeview.column(column=f'{item}', width=w, minwidth=mw, stretch=False, anchor=anchor)
-            self.treeview.heading(column='#0', text=f'{self.header[0][1]}', anchor=self.header[0][4]) # type: ignore
-            self.treeview.column(column='#0', width=self.header[0][2], minwidth=self.header[0][3], stretch=False, anchor=self.header[0][5]) # type: ignore
+            self.treeview.heading(column='#0', text=f'{self.header[0][1]}', anchor=self.header[0][4])
+            self.treeview.column(column='#0', width=self.header[0][2], minwidth=self.header[0][3], stretch=False, anchor=self.header[0][5])
         self.insert_items(self.items)
+        # pylint: enable=line-too-long
 
 
     def _get_header_keys(self, items):
@@ -194,7 +201,6 @@ class CTkTreeview(ctk.CTkFrame):
         selected_rows = self.treeview.selection()
         for row in selected_rows:
             self.treeview.delete(row)
-            # Remove from modified cells tracking if present
             self._modified_cells = {cell for cell in self._modified_cells if cell[0] != row}
 
 
@@ -219,14 +225,13 @@ class CTkTreeview(ctk.CTkFrame):
 
         if kw:
             self.treeview.tag_configure(tag_name, **kw)
-            # Apply tag to item (preserving existing tags if any)
             current_tags = list(self.treeview.item(item_id, "tags"))
             if tag_name not in current_tags:
                 current_tags.append(tag_name)
                 self.treeview.item(item_id, tags=current_tags)
 
 
-    def enable_cell_editing(self, columns=None, edit_callback=None, permission_callback=None):
+    def enable_cell_editing(self, columns=None, edit_callback=None, permission_callback=None, input_validation=None): # pylint: disable=line-too-long
         """
         Enable editing of cells on double-click.
 
@@ -245,10 +250,13 @@ class CTkTreeview(ctk.CTkFrame):
                                  Should return:
                                    - True: Allow editing
                                    - False: Prevent editing
+            input_validation: A function to validate input on keypress.
+                              Signature: callback(new_text) -> bool
         """
         self.editable_columns = columns
         self.edit_callback = edit_callback
         self.permission_callback = permission_callback
+        self.input_validation = input_validation
         self.treeview.bind("<Double-Button-1>", self._on_double_click)
 
 
@@ -296,7 +304,6 @@ class CTkTreeview(ctk.CTkFrame):
             else:
                 current_key = None
 
-        # Check if editing is restricted to specific columns
         if self.editable_columns is not None:
             if current_key not in self.editable_columns:
                 return
@@ -311,25 +318,29 @@ class CTkTreeview(ctk.CTkFrame):
             values = self.treeview.item(row_id, "values")
             current_value = values[col_idx] if values else ""
 
-        # Check permission callback if defined
         if self.permission_callback:
             row_data = self._get_row_data(row_id)
             if not self.permission_callback(row_id, current_key, str(current_value), row_data):
                 return
+
+        validate_kw = {}
+        if self.input_validation:
+            vcmd = (self.register(self.input_validation), '%P')
+            validate_kw = {'validate': 'key', 'validatecommand': vcmd}
 
         self.entry_popup = ctk.CTkEntry(
             self.treeview,
             width=bbox[2],
             height=bbox[3],
             fg_color=self.bg_color,
-            bg_color=self.bg_color, # Explicitly matching parent bg to avoid artifacts
+            bg_color=self.bg_color,
             text_color=self.text_color,
-            corner_radius=5
+            corner_radius=5,
+            **validate_kw
         )
         self.entry_popup.place(x=bbox[0], y=bbox[1])
         self.entry_popup.insert(0, str(current_value))
         self.entry_popup.focus()
-        # Bind events
         self.entry_popup.bind("<Return>", lambda e: self._on_edit_confirm(row_id, col_idx))
         self.entry_popup.bind("<FocusOut>", lambda e: self._on_edit_cancel())
         self.entry_popup.bind("<Escape>", lambda e: self._on_edit_cancel())
@@ -339,9 +350,8 @@ class CTkTreeview(ctk.CTkFrame):
 
     def _on_edit_confirm(self, row_id, col_idx): # pylint: disable=too-many-branches
         """Save edited value back to treeview with optional validation."""
-        new_value = self.entry_popup.get() # type: ignore
+        new_value = self.entry_popup.get() if self.entry_popup is not None else None
 
-        # Determine current column key
         if col_idx == -1:
             col_key = '#0'
             old_value = self.treeview.item(row_id, "text")
@@ -349,40 +359,32 @@ class CTkTreeview(ctk.CTkFrame):
             if self.col_keys and col_idx < len(self.col_keys):
                 col_key = self.col_keys[col_idx]
             else:
-                col_key = f'#{col_idx + 1}' # Fallback
+                col_key = f'#{col_idx + 1}'
             values = list(self.treeview.item(row_id, "values"))
-            # Ensure values list is long enough
             while len(values) <= col_idx:
                 values.append("")
             old_value = values[col_idx]
 
-        # Prepare row_data for validator
         row_data = self._get_row_data(row_id)
 
-        # Validation callback
         if self.edit_callback:
             result = self.edit_callback(row_id, col_key, old_value, new_value, row_data)
-
             if result is False:
-                # Rejected
                 self._on_edit_cancel()
                 return
             if isinstance(result, str):
-                # Accepted with modified value
                 new_value = result
             # else: True -> accept as is
 
-        # Apply change
         if col_idx == -1:
-            self.treeview.item(row_id, text=new_value)
+            self.treeview.item(row_id, text=str(new_value) if new_value is not None else "")
         else:
             values = list(self.treeview.item(row_id, "values"))
             while len(values) <= col_idx:
                 values.append("")
-            values[col_idx] = new_value
+            values[col_idx] = new_value if new_value is not None else ""
             self.treeview.item(row_id, values=values)
 
-        # Track modification if value changed
         if str(new_value) != str(old_value):
             if col_key:
                 self._modified_cells.add((row_id, col_key))
@@ -409,7 +411,6 @@ class CTkTreeview(ctk.CTkFrame):
             condition_func: A function that takes (text, values) and returns bool.
                             True = Show row, False = Hide row.
         """
-        # First, ensure we work on the full dataset
         self.clear_filters()
 
         # Retrieve all items recursively to check against the filter
@@ -430,15 +431,11 @@ class CTkTreeview(ctk.CTkFrame):
             text = self.treeview.item(item_id, "text")
 
             if not condition_func(text, values):
-                # Store necessary info to restore later
                 parent = self.treeview.parent(item_id)
                 index = self.treeview.index(item_id)
                 items_to_hide.append((item_id, parent, index))
-
-        # Detach items (hide them)
         for item_data in items_to_hide:
             item_id = item_data[0]
-            # Verify item still exists (wasn't detached as part of a parent detach)
             if self.treeview.exists(item_id):
                 self.treeview.detach(item_id)
                 self._hidden_items.append(item_data)
@@ -452,22 +449,12 @@ class CTkTreeview(ctk.CTkFrame):
             return
 
         # Sort hidden items by index to attempt maintaining relative order upon restoration
-        # Sorting by index helps when restoring multiple items to the same parent
         self._hidden_items.sort(key=lambda x: x[2])
 
         for item_id, parent, index in self._hidden_items:
             if self.treeview.exists(item_id):
                 try:
-                    # 'parent' might store an ID. If parent was also hidden and not yet restored,
-                    # this might fail or attach to root. However, since we iterate strictly,
-                    # we rely on the user/logic ensuring hierarchy integrity or we just re-attach.
-                    # If the parent is detached, we can't attach to it easily until it's back.
-                    # But since we detached strictly based on the filter, if parent matched filter, it's there.
-                    # If parent didn't match, it's in the list too.
-                    # Simple restore:
                     if not self.treeview.exists(parent) and parent != '':
-                        # If parent is gone (shouldn't happen if we manage list correctly), attach to root?
-                        # Or skip? For now, standard attempt.
                         pass
                     self.treeview.move(item_id, parent, index)
                 except: # pylint: disable=bare-except

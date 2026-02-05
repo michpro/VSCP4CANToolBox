@@ -14,6 +14,7 @@ firmware upload and configuration.
 import os
 import re
 from pathlib import Path
+from typing import Any, cast
 import requests
 import tk_async_execute as tae
 import customtkinter as ctk
@@ -25,6 +26,7 @@ from .common import add_set_state_callback, call_set_scan_widget_state,     \
                     add_neighbours_handle, neighbours_handle
 from .popup import CTkFloatingWindow
 from .node_config import NodeConfiguration
+from .change_node_id import ChangeNodeId
 
 
 class LeftPanel(ctk.CTkFrame):
@@ -53,7 +55,7 @@ class LeftPanel(ctk.CTkFrame):
         self.button = ctk.CTkButton(self.widget, text='Send Host DateTime',
                                     width=100, height=28, command=self.button_cb)
         self.button.pack(padx=5, pady=(5, 10), fill='x')
-
+        # TODO remove
         # self.button1 = ctk.CTkButton(self.widget, text='test', width=100, height=28,
         #                             command=self.button1_cb)
         # self.button1.pack(padx=5, pady=(0, 10), fill='x')
@@ -62,19 +64,6 @@ class LeftPanel(ctk.CTkFrame):
     def button_cb(self):
         """Callback for the 'Send Host DateTime' button."""
         tae.async_execute(vscp.send_host_datetime(), visible=False)
-
-
-    def button1_cb(self): # TODO remove
-        """
-        Temporary test callback.
-        
-        Todo:
-            Remove this method before final release.
-        """
-        # tae.async_execute(vscp.set_nickname(0x02, 0x0A), visible=False)
-        # tae.async_execute(vscp.set_nickname(0x0A, 0x02), visible=False)
-        # tae.async_execute(vscp.scan(0, 20), visible=False)
-        pass
 
 
 class Neighbourhood(ctk.CTkFrame):
@@ -122,6 +111,7 @@ class ScanWidget(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
         """
         self.parent = parent
         super().__init__(self.parent)
+        # TODO remove
         # self.add_node_in_progress = False
 
         self.widget = ctk.CTkFrame(self.parent)
@@ -129,29 +119,33 @@ class ScanWidget(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
 
         self.min_range = [0, 254]
         self.max_range = [0, 254]
+
+        # Define variables first to ensure they exist for validation callbacks
+        self.min_id_var = ctk.StringVar(value=f'0x{self.min_range[0]:02X}')
+        self.max_id_var = ctk.StringVar(value=f'0x{self.max_range[1]:02X}')
+
         self.l_min_id = ctk.CTkLabel(self.widget, corner_radius=0, text='Start ID:')
         self.l_min_id.grid(row=0, column=0, sticky='w', pady=5, padx=(5, 0))
+
         validate_min_id = (self.register(self._validate_start), '%P')
-        self.min_id_var = ctk.StringVar(value=f'0x{self.min_range[0]:02X}')
         self.min_id = ctk.CTkEntry(self.widget, width=45, textvariable=self.min_id_var,
                                    validate="key", validatecommand=validate_min_id)
-        self.min_id.bind('<FocusOut>', self._min_id_focus_out)
         self.min_id.bind("<KeyRelease>", self._min_id_format)
         self.min_id.grid(row=0, column=1, sticky='w', pady=5, padx=(3, 0))
 
         self.l_max_id = ctk.CTkLabel(self.widget, corner_radius=0, text='Stop ID:')
         self.l_max_id.grid(row=0, column=2, sticky='w', pady=5, padx=(10, 0))
+
         validate_max_id = (self.register(self._validate_stop), '%P')
-        self.max_id_var = ctk.StringVar(value=f'0x{self.max_range[1]:02X}')
         self.max_id = ctk.CTkEntry(self.widget, width=45, textvariable=self.max_id_var,
                                    validate="key", validatecommand=validate_max_id)
-        self.max_id.bind('<FocusOut>', self._max_id_focus_out)
         self.max_id.bind("<KeyRelease>", self._max_id_format)
         self.max_id.grid(row=0, column=3, sticky='w', pady=5, padx=(3,0))
 
         self.button_scan = ctk.CTkButton(self.widget, width=50, text='Scan',
                                          command=self._button_scan_callback)
         self.button_scan.grid(row=0, column=4, sticky='w', pady=5, padx=(10, 0))
+        # TODO remove
         # self.toggle_var = ctk.StringVar(value='on')
         # self.toggle = ctk.CTkSwitch(self.widget, variable=self.toggle_var,
         #                             onvalue='on', offvalue='off', text='Smart add',
@@ -164,20 +158,17 @@ class ScanWidget(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
     def _min_id_format(self, _):
         """Format the Start ID input to hex style (e.g., 0x01) on key release."""
         input_str = self.min_id_var.get()
+
+        # Safety net: restore '0x' if validation was bypassed or failed
+        if not input_str.lower().startswith('0x'):
+            clean_hex = ''.join(filter(lambda x: x in '0123456789abcdefABCDEF', input_str))
+            new_val = f'0x{clean_hex}'
+            self.min_id_var.set(new_val)
+            self.min_id.icursor('end')
+            return
+
         if input_str.lower().startswith('0x'):
             self.min_id_var.set(input_str[:2].lower() + input_str[2:].upper())
-
-
-    def _min_id_focus_out(self, _): # TODO implement
-        """
-        Handle focus out event for Min ID entry.
-        
-        Todo:
-            Implement logic to update internal state or handle validation on exit.
-        """
-        pass
-        # self.max_range[0] = int(self.min_id_var.get(), 0)
-        # print('max range', self.max_range)
 
 
     def _validate_start(self, input_str):
@@ -190,45 +181,56 @@ class ScanWidget(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
         Returns:
             bool: True if input is valid, False otherwise.
         """
-        result = True
-        if 0 != len(input_str):
-            if input_str.lower().startswith('0x'):
-                if 2 < len(input_str):
-                    if input_str.startswith('0x00'):
-                        result = False
-                    else:
-                        try:
-                            result = self.min_range[0] <= int(input_str, 16) <= self.min_range[1]
-                        except ValueError:
-                            result = False
-            else:
-                if input_str.startswith('00'):
-                    result = False
-                else:
+        # 1. Protection against deleting '0x'
+        if not input_str.lower().startswith('0x'):
+            return False
+
+        # 2. Allow incomplete '0x' during editing
+        if len(input_str) < 3:
+            return True
+
+        is_valid = False
+        try: # pylint: disable=too-many-nested-blocks
+            # 3. Hex format validation
+            val = int(input_str, 16)
+
+            # 4. Global range check (0-254)
+            if self.min_range[0] <= val <= self.min_range[1]:
+                is_valid = True
+
+                # 5. Cross-check: Start ID must be <= Stop ID
+                if hasattr(self, 'max_id_var'):
                     try:
-                        result = self.min_range[0] <= int(input_str) <= self.min_range[1]
+                        current_max_str = self.max_id_var.get()
+                        if len(current_max_str) > 2:
+                            max_val = int(current_max_str, 16)
+                            # Check strictly: input must not exceed Max ID
+                            if val > max_val:
+                                is_valid = False
                     except ValueError:
-                        result = False
-        return result
+                        pass # Stop ID is invalid, relax constraint
+
+        except (ValueError, Exception): # pylint: disable=broad-exception-caught
+            # Fallback to prevent disabling validation permanently
+            is_valid = False
+
+        return is_valid
 
 
     def _max_id_format(self, _):
         """Format the Stop ID input to hex style (e.g., 0xFF) on key release."""
         input_str = self.max_id_var.get()
+
+        # Safety net: restore '0x' if validation was bypassed or failed
+        if not input_str.lower().startswith('0x'):
+            clean_hex = ''.join(filter(lambda x: x in '0123456789abcdefABCDEF', input_str))
+            new_val = f'0x{clean_hex}'
+            self.max_id_var.set(new_val)
+            self.max_id.icursor('end')
+            return
+
         if input_str.lower().startswith('0x'):
             self.max_id_var.set(input_str[:2].lower() + input_str[2:].upper())
-
-
-    def _max_id_focus_out(self, _): # TODO implement
-        """
-        Handle focus out event for Max ID entry.
-        
-        Todo:
-            Implement logic to update internal state or handle validation on exit.
-        """
-        pass
-        # self.min_range[1] = int(self.max_id_var.get(), 0)
-        # print('min range', self.min_range)
 
 
     def _validate_stop(self, input_str):
@@ -241,30 +243,78 @@ class ScanWidget(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
         Returns:
             bool: True if input is valid, False otherwise.
         """
-        result = True
-        if 0 != len(input_str):
-            if input_str.lower().startswith('0x'):
-                if 2 < len(input_str):
-                    if input_str.startswith('0x00'):
-                        result = False
-                    else:
-                        try:
-                            result = self.max_range[0] <= int(input_str, 16) <= self.max_range[1]
-                        except ValueError:
-                            result = False
-            else:
-                if input_str.startswith('00'):
-                    result = False
-                else:
+        # 1. Protection against deleting '0x'
+        if not input_str.lower().startswith('0x'):
+            return False
+
+        # 2. Allow incomplete '0x' during editing
+        if len(input_str) < 3:
+            return True
+
+        is_valid = False
+        try: # pylint: disable=too-many-nested-blocks
+            # 3. Hex format validation
+            val = int(input_str, 16)
+
+            # 4. Global range check (0-254)
+            if self.max_range[0] <= val <= self.max_range[1]:
+                is_valid = True
+
+                # 5. Cross-check: Stop ID must be >= Start ID
+                if hasattr(self, 'min_id_var'):
                     try:
-                        result = self.max_range[0] <= int(input_str) <= self.max_range[1]
+                        current_min_str = self.min_id_var.get()
+                        if len(current_min_str) > 2:
+                            min_val = int(current_min_str, 16)
+
+                            # Check "lookahead": Is it possible to form a valid number
+                            # >= min_val from this input?
+                            missing_chars = 4 - len(input_str)
+                            missing_chars = max(missing_chars, 0)
+
+                            # Construct the largest possible number starting with input_str
+                            potential_max_str = input_str + ('F' * missing_chars)
+                            potential_max_val = int(potential_max_str, 16)
+
+                            if potential_max_val < min_val:
+                                is_valid = False
                     except ValueError:
-                        result = False
-        return result
+                        pass # Start ID is invalid, relax constraint
+
+        except (ValueError, Exception): # pylint: disable=broad-exception-caught
+            is_valid = False
+
+        return is_valid
 
 
     def _button_scan_callback(self):
         """Initiate the scan process asynchronously."""
+        min_str = self.min_id_var.get()
+        max_str = self.max_id_var.get()
+        error_msg = None
+
+        if len(min_str) < 3:
+            error_msg = "Start ID is invalid (empty or incomplete)."
+        elif len(max_str) < 3:
+            error_msg = "Stop ID is invalid (empty or incomplete)."
+        else:
+            try:
+                min_val = int(min_str, 16)
+                max_val = int(max_str, 16)
+
+                if min_val > max_val:
+                    error_msg = f"Start ID (0x{min_val:02X}) cannot be greater than Stop ID (0x{max_val:02X})."
+                elif not 0 <= min_val <= 254:
+                    error_msg = "Start ID must be between 0x00 and 0xFE."
+                elif not 0 <= max_val <= 254:
+                    error_msg = "Stop ID must be between 0x00 and 0xFE."
+            except ValueError:
+                error_msg = "Invalid hexadecimal format."
+
+        if error_msg:
+            CTkMessagebox(title='Error', message=error_msg, icon='cancel')
+            return
+
         tae.async_execute(self._call_scan(), visible=False)
 
 
@@ -275,44 +325,17 @@ class ScanWidget(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
         Reads the min/max ID, calls the vscp library to scan, and populates
         the neighbours treeview with results.
         """
-        min_id = int(self.min_id_var.get(), 0)
-        max_id = int(self.max_id_var.get(), 0)
+        try:
+            min_id = int(self.min_id_var.get(), 16)
+            max_id = int(self.max_id_var.get(), 16)
+        except ValueError:
+            return
+
         nodes = await vscp.scan(min_id, max_id)
         if 0 < nodes:
-            neighbours_handle().reload_data() # type: ignore
-
-
-    # def check_node(self, node_id: int):
-    #     if 'on' == self.toggle_var.get() and                   \
-    #        node_id != vscp.get_this_node_nickname() and        \
-    #        self.add_node_in_progress is False:
-    #         self.add_node_in_progress = True
-    #         tae.async_execute(self._get_new_node_data(node_id), visible=False)
-
-
-    # async def _get_new_node_data(self, nickname: int) -> None:
-    #     if vscp.is_node_on_list(nickname) is False:
-    #         node = await vscp.get_node_info(nickname)
-    #         vscp.append_node({'id': nickname})
-    #     #     node_id = f"0x{node['id']:02X}"
-    #     #     if node['isHardCoded'] is True:
-    #     #         node_id = '►' + node_id + '◄'
-    #     #     data = [{'text': node_id,
-    #     #             'child': [{'text': 'GUID:', 'values': [node['guid']['str']]},
-    #     #                     {'text': 'MDF:',  'values': ['http://' + node['mdf']]}
-    #     #                     ]
-    #     #         }]
-    #     #     neighbours_handle().insert(data)
-    #     self.add_node_in_progress = False
-
-
-    # def toggle_cb(self): # TODO remove
-    #     match self.toggle_var.get():
-    #         case 'on':
-    #             pass
-    #         case _:
-    #             pass
-    #     # self.add_node_in_progress = False
+            handle = neighbours_handle()
+            if hasattr(handle, 'reload_data'):
+                cast(Any, handle).reload_data()
 
 
     def set_scan_widget_state(self, state):
@@ -327,6 +350,7 @@ class ScanWidget(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
         self.l_max_id.configure(state=state)
         self.max_id.configure(state=state)
         self.button_scan.configure(state=state)
+        # TODO remove
         # self.toggle.configure(state=state)
 
 
@@ -557,11 +581,9 @@ class Neighbours(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
                     try:
                         fw.fromfile(fw_path, format=extension)
                         fw_data = fw.tobinarray().tolist()
-                        result = True
+                        tae.async_execute(vscp.firmware_upload(node_id, fw_data), visible=False)
                     except ValueError:
-                        result = False
-                    if result is True:
-                        tae.async_execute(vscp.firmware_upload(node_id, fw_data), visible=False) # type: ignore
+                        pass
             else:
                 CTkMessagebox(title='Error', message='Firmware file not selected!!!', icon='cancel')
         else:
@@ -615,7 +637,8 @@ class Neighbours(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
             mdf = self._get_local_mdf()
         if mdf:
             try:
-                vscp.mdf.parse(mdf) # type: ignore
+                mdf_text = mdf.decode('utf-8') if isinstance(mdf, bytes) else str(mdf)
+                vscp.mdf.parse(mdf_text)
                 self._set_menu_items_state('disabled')
                 self.config_window = NodeConfiguration(self, node_id, guid)
                 self.config_window.bring_to_front()
@@ -659,153 +682,10 @@ class Neighbours(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
         Destroys the window instance and re-enables menu items.
         """
         try:
-            self.config_window.window.destroy() # type: ignore
+            if self.config_window is not None:
+                self.config_window.window.destroy()
         except: # pylint: disable=bare-except
             pass
         finally:
             self.config_window = None
             self._set_menu_items_state('normal')
-
-
-class ChangeNodeId(ctk.CTkToplevel): # pylint: disable=too-many-instance-attributes
-    """
-    Popup window to change a node's nickname.
-
-    Provides a modal dialog to input a new Node ID in hexadecimal format.
-    """
-    def __init__(self, parent, current_id, callback):
-        """
-        Initialize the ChangeNodeId.
-
-        Args:
-            parent: The parent widget.
-            current_id (int): The current node ID.
-            callback (func): Function to call with (old_id, new_id) on success.
-        """
-        super().__init__(parent)
-        self.callback = callback
-        self.current_id = current_id
-        self.title('Change Node ID')
-
-        current_path = os.path.dirname(os.path.realpath(__file__))
-        icon_dir = os.path.join(current_path, 'icons')
-        icon_path = os.path.join(icon_dir, 'vscp_logo.ico')
-        self.after(250, lambda: self.iconbitmap(icon_path))
-
-        # Center the window relative to the application window
-        width = 270
-        height = 130
-
-        # Get application window geometry
-        app_window = parent.winfo_toplevel()
-        x = int(app_window.winfo_rootx() + (app_window.winfo_width() / 2) - (width / 2))
-        y = int(app_window.winfo_rooty() + (app_window.winfo_height() / 2) - (height / 2))
-
-        self.geometry(f'{width}x{height}+{x}+{y}')
-        self.resizable(False, False)
-
-        # Input Frame (Row 1)
-        self.frame_input = ctk.CTkFrame(self, fg_color='transparent')
-        self.frame_input.pack(side='top', fill='both', expand=True)
-        self.frame_input.grid_columnconfigure((0, 1, 2), weight=1)
-        self.frame_input.grid_rowconfigure(0, weight=1)
-
-        self.label_current = ctk.CTkLabel(self.frame_input, text=f"Current ID: 0x{current_id:02X}")
-        self.label_current.grid(row=0, column=0, padx=(10, 5), sticky="e")
-
-        self.label_new = ctk.CTkLabel(self.frame_input, text="New ID:")
-        self.label_new.grid(row=0, column=1, padx=(5, 0), sticky="e")
-
-        self.min_range = [0, 254]
-        validate_cmd = (self.register(self._validate_input), '%P')
-        self.new_id_var = ctk.StringVar(value="0x")
-        self.entry = ctk.CTkEntry(self.frame_input, width=45, textvariable=self.new_id_var,
-                                  validate="key", validatecommand=validate_cmd)
-        self.entry.bind("<KeyRelease>", self._format_input)
-        self.entry.grid(row=0, column=2, padx=(5, 10), sticky="w")
-
-        # Focus handling after delay to ensure window/icon init doesn't steal it
-        self.after(300, self._set_focus)
-
-        # Button Frame (Row 2)
-        self.frame_buttons = ctk.CTkFrame(self, fg_color='transparent')
-        self.frame_buttons.pack(side='top', fill='both', expand=True)
-        self.frame_buttons.grid_columnconfigure((0, 1), weight=1)
-        self.frame_buttons.grid_rowconfigure(0, weight=1)
-
-        self.btn_ok = ctk.CTkButton(self.frame_buttons, text="OK", width=90, command=self._on_ok)
-        self.btn_ok.grid(row=0, column=0, padx=(10, 20), sticky="e")
-
-        self.btn_cancel = ctk.CTkButton(self.frame_buttons, text="Cancel", width=90, command=self.destroy)
-        self.btn_cancel.grid(row=0, column=1, padx=(20, 10), sticky="w")
-
-        self.transient(parent)
-        self.grab_set()
-
-
-    def _set_focus(self):
-        """Set initial focus to the entry widget and move cursor to end."""
-        self.entry.focus_set()
-        try:
-            self.entry.icursor('end')
-        except: # pylint: disable=bare-except
-            pass
-
-
-    def _format_input(self, _):
-        """Format input to hex style (e.g., 0x01)."""
-        input_str = self.new_id_var.get()
-        if input_str.lower().startswith('0x'):
-            self.new_id_var.set(input_str[:2].lower() + input_str[2:].upper())
-
-
-    def _validate_input(self, input_str):
-        """
-        Validate input range (0-254) and hex format.
-        Also prevents deletion of the '0x' prefix.
-        """
-        # Block removal of '0x'
-        if not input_str.lower().startswith('0x'):
-            return False
-
-        result = True
-        if 0 != len(input_str):
-            if input_str.lower().startswith('0x'):
-                if 2 < len(input_str):
-                    if input_str.startswith('0x00'):
-                        result = False
-                    else:
-                        try:
-                            result = self.min_range[0] <= int(input_str, 16) <= self.min_range[1]
-                        except ValueError:
-                            result = False
-            else:
-                # Should not reach here due to prefix check, but kept for logic safety
-                if input_str.startswith('00'):
-                    result = False
-                else:
-                    try:
-                        result = self.min_range[0] <= int(input_str) <= self.min_range[1]
-                    except ValueError:
-                        result = False
-        return result
-
-
-    def _on_ok(self):
-        """Handle OK button click."""
-        try:
-            val_str = self.new_id_var.get()
-            if not val_str or val_str == '0x':
-                return
-            new_id = int(val_str, 0)
-
-            # Check if node already exists
-            if vscp.is_node_on_list(new_id):
-                CTkMessagebox(title='Error', message=f'Node ID 0x{new_id:02X} already exists!', icon='cancel')
-                return
-
-            if self.callback:
-                self.callback(self.current_id, new_id)
-            self.destroy()
-        except ValueError:
-            pass
