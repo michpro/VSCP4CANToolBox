@@ -643,6 +643,7 @@ class Neighbours(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
                 self.config_window = NodeConfiguration(self, node_id, guid)
                 self.config_window.bring_to_front()
             except: # pylint: disable=bare-except
+                self.close_node_configuration()
                 CTkMessagebox(title='Error', message='Error while parsing an MDF file!!!', icon='cancel')
         else:
             CTkMessagebox(title='Error', message='No valid MDF file for the selected node!!!', icon='cancel')

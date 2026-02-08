@@ -8,14 +8,113 @@ It handles displaying, reading, and writing VSCP registers using a Treeview.
 @copyright SPDX-FileCopyrightText: Copyright 2024-2026 by Michal Protasowicki
 @license SPDX-License-Identifier: MIT
 """
+# pylint: disable=too-many-lines
 
 
+import tkinter as tk
 import customtkinter as ctk
 import tk_async_execute as tae
 import vscp
 from gui.common import update_progress
+from .info_widget import ScrollableInfoTable
 from .treeview import CTkTreeview
 from .popup import CTkFloatingWindow
+
+
+class ToolTip: # pylint: disable=too-many-instance-attributes
+    """
+    Creates a tooltip for a given widget as the user hovers the mouse cursor.
+    """
+
+    def __init__(self, widget, text):
+        """
+        Initializes the tooltip.
+
+        Args:
+            widget: The widget to bind the tooltip to.
+            text: The text to display in the tooltip.
+        """
+        self.widget = widget
+        self.text = text
+        self.tip_window = None
+        self.id = None
+        self.x = self.y = 0
+        self._id1 = self.widget.bind("<Enter>", self.enter)
+        self._id2 = self.widget.bind("<Leave>", self.leave)
+
+
+    def enter(self, _event=None):
+        """
+        Callback for mouse entering the widget. Schedules the tooltip display.
+        """
+        self.schedule()
+
+
+    def leave(self, _event=None):
+        """
+        Callback for mouse leaving the widget. Hides the tooltip.
+        """
+        self.unschedule()
+        self.hide_tip()
+
+
+    def schedule(self):
+        """
+        Schedules the tooltip to be displayed after a delay.
+        """
+        self.unschedule()
+        self.id = self.widget.after(500, self.show_tip)
+
+
+    def unschedule(self):
+        """
+        Cancels the scheduled tooltip display.
+        """
+        id_ = self.id
+        self.id = None
+        if id_:
+            self.widget.after_cancel(id_)
+
+
+    def show_tip(self, _event=None):
+        """
+        Creates and displays the tooltip window.
+        """
+        # Calculate position relative to the widget using winfo_root instead of bbox
+        x = self.widget.winfo_rootx() + 25
+        y = self.widget.winfo_rooty() + 20
+
+        # Check if text is valid
+        if self.text:
+            self.tip_window = tw = tk.Toplevel(self.widget)
+            tw.wm_overrideredirect(True)
+            tw.wm_geometry(f"+{x}+{y}")
+
+            # Attempt to set transparent background for the Toplevel window
+            # This removes the white rectangle behind rounded corners (mainly for Windows)
+            transparent_key = "#000001"
+            bg_fallback = "gray20"
+
+            try:
+                tw.wm_attributes("-transparentcolor", transparent_key)
+                tw.configure(bg=transparent_key)
+            except Exception: # pylint: disable=broad-exception-caught
+                # Fallback for systems that don't support -transparentcolor
+                tw.configure(bg=bg_fallback)
+
+            label = ctk.CTkLabel(tw, text=self.text, corner_radius=6,
+                                 fg_color="gray60", text_color="black", width=200, wraplength=190)
+            label.pack()
+
+
+    def hide_tip(self):
+        """
+        Destroys the tooltip window.
+        """
+        tw = self.tip_window
+        self.tip_window = None
+        if tw:
+            tw.destroy()
 
 
 class RegistersTab(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes, too-many-ancestors
@@ -23,7 +122,7 @@ class RegistersTab(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
     Tab for viewing and editing VSCP registers.
 
     Displays register data in a treeview and shows detailed information about
-    the selected register in a side panel.
+    the selected register in a side panel using a rich text table.
     """
 
     def __init__(self, parent, node_id: int):
@@ -46,11 +145,11 @@ class RegistersTab(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
         self.widget = ctk.CTkFrame(parent, fg_color='transparent')
         self.widget.pack(padx=0, pady=0, side='top', anchor='nw', fill='both', expand=True)
 
-        header = [('address', 'Page:Offset', 105, 105, 'center', 'center'),
-                  ('access', 'Access', 45, 45, 'center', 'center'),
-                  ('value', 'Value', 45, 45, 'center', 'center'),
-                  ('toSync', 'To Sync', 45, 45, 'center', 'center'),
-                  ('name', '  Name', 505, 505, 'w', 'w'),
+        header = [('address',   'Page:Offset',  105, 105, 'center', 'center'),
+                  ('access',    'Access',       45,  45,  'center', 'center'),
+                  ('value',     'Value',        45,  45,  'center', 'center'),
+                  ('toSync',    'To Sync',      45,  45,  'center', 'center'),
+                  ('name',      '  Name',       505, 505, 'w',      'w'),
                   ]
         self.registers = CTkTreeview(self.widget, header, xscroll=False)
         self.registers.pack(side='left', padx=0, pady=0, fill='both', expand=True)
@@ -61,9 +160,8 @@ class RegistersTab(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
                                            input_validation=self._validate_input)
 
         self.registers.treeview.bind('<<TreeviewSelect>>', self._update_registers_info)
-        # self.registers.treeview.bind('<Double-Button-1>', self.item_deselect)
         self.registers.treeview.bind('<Button-3>', lambda event: self._show_menu(event, self.dropdown))
-        # self.registers.treeview.bind('<<TreeviewSelect>>', self._parse_msg_data)
+        self.registers.treeview.bind('<Button-1>', self._on_treeview_click)
 
         # --- Context Menu (Popup) ---
         # Using self.widget.winfo_toplevel() as master to ensure correct parenting on the Toplevel window
@@ -86,14 +184,30 @@ class RegistersTab(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
         self.dropdown_bt_write_all.pack(expand=True, fill="x", padx=0, pady=0)
         # ----------------------------
 
-        font = ctk.CTkFont(family='TkDefaultFont', size=15)
-        bold_font = ctk.CTkFont(family='TkDefaultFont', size=15, weight='bold')
+        # --- Info Panel ---
         temp_fg_color = tuple(self._fg_color) if isinstance(self._fg_color, list) else self._fg_color
-        self.registers_info = ctk.CTkTextbox(self.widget, font=font, width=250, border_spacing=1, fg_color=temp_fg_color)
-        self.registers_info.pack(padx=(5, 0), pady=0, side='right', anchor='ne', fill='y', expand=False)
-        self.registers_info.bind("<Button-1>", lambda e: 'break')
-        self.registers_info.configure(state='disabled')
-        self.registers_info.tag_config('bold', font=bold_font)
+        self.container_bg_color = temp_fg_color  # Store for dynamic widgets background inheritance
+
+        # Container frame for the info widget and potentially other future widgets
+        self.info_container = ctk.CTkFrame(self.widget, width=350, fg_color=temp_fg_color)
+        self.info_container.pack(padx=(5, 0), pady=0, side='right', anchor='ne', fill='y', expand=False)
+        self.info_container.grid_propagate(False) # Enforce width/height behavior
+
+        # Use Grid layout for info_container to handle dynamic resizing properly
+        self.info_container.grid_columnconfigure(0, weight=1)
+        self.info_container.grid_rowconfigure(0, weight=1) # Row 0: Registers Info (expands)
+        self.info_container.grid_rowconfigure(1, weight=0) # Row 1: Dynamic Widgets (shrinks)
+
+        self.registers_info = ScrollableInfoTable(
+            self.info_container,
+            data={}, # Initial empty data
+            col1_width=110, # Fixed width for labels column
+            font_size=11,
+            fg_color=temp_fg_color
+        )
+        self.registers_info.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
+
+        self.dynamic_frame = ctk.CTkFrame(self.info_container, fg_color="transparent")
 
         # Start async read of real register values
         tae.async_execute(self._prepare_registers_data(), wait=False, visible=False, pop_up=False, callback=None, master=self)
@@ -120,6 +234,16 @@ class RegistersTab(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
             result.append(entry)
         if result:
             self.registers.insert_items(result)
+
+
+    def _on_treeview_click(self, event):
+        """
+        Handles click events on the treeview.
+        Deselects items if clicked on empty space.
+        """
+        if not self.registers.treeview.identify_row(event.y):
+            self.registers.treeview.selection_remove(self.registers.treeview.selection())
+            self._update_registers_info(None)
 
 
     async def _execute_read_registers(self, registers_map: dict, start_progress: float = 0.0) -> None: # pylint: disable=line-too-long, too-many-locals, too-many-branches, too-many-statements
@@ -341,7 +465,6 @@ class RegistersTab(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
             if not parent_id:
                 continue
 
-            # Parse Page
             parent_text = self.registers.treeview.item(parent_id, 'text')
             if 'Page' in parent_text:
                 try:
@@ -377,7 +500,6 @@ class RegistersTab(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
             if not parent_id:
                 continue
 
-            # Parse Page
             parent_text = self.registers.treeview.item(parent_id, 'text')
             if 'Page' in parent_text:
                 try:
@@ -393,7 +515,6 @@ class RegistersTab(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
             except ValueError:
                 continue
 
-            # Check sync status and add to map
             if page in self.registers_data and addr in self.registers_data[page]:
                 reg_data = self.registers_data[page][addr]
                 if reg_data.get('to_sync') == vscp.mdf.sync_write:
@@ -533,7 +654,7 @@ class RegistersTab(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
         return result
 
 
-    def _on_cell_edit(self, row_id, _col_key, _old_val, _new_val, _row_data): # pylint: disable=too-many-branches, too-many-statements
+    def _on_cell_edit(self, row_id, _col_key, _old_val, _new_val, _row_data): # pylint: disable=too-many-branches, too-many-statements, too-many-locals
         """
         Callback executed after a cell has been edited.
         Validates the input value and limits.
@@ -559,26 +680,66 @@ class RegistersTab(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
                 reg_text = self.registers.treeview.item(row_id, 'text')
                 reg_addr = int(reg_text, 16)
 
-                # 2. Determine limits (min/max)
-                # Default range 0x00 - 0xFF
+                # 2. Determine limits (min/max OR valuelist)
                 min_val = 0x00
                 max_val = 0xFF
+                allowed_values = None # Will be a set if valuelist exists
 
                 reg_info = {}
                 if page in self.registers_data and reg_addr in self.registers_data[page]:
                     reg_info = self.registers_data[page][reg_addr]
 
-                    if 'min' in reg_info and reg_info['min'] is not None:
-                        try:
-                            min_val = int(str(reg_info['min']), 0)
-                        except (ValueError, TypeError):
-                            pass
+                    # Check for valuelist override
+                    if 'valuelist' in reg_info and reg_info['valuelist']:
+                        allowed_values = set()
+                        raw_vl = reg_info['valuelist']
+                        # Parse valuelist similar to _create_dynamic_widgets logic
+                        if isinstance(raw_vl, dict):
+                            for k in raw_vl.keys():
+                                try:
+                                    allowed_values.add(int(str(k), 0))
+                                except (ValueError, TypeError):
+                                    pass
+                        elif isinstance(raw_vl, list):
+                            for idx, item in enumerate(raw_vl):
+                                if isinstance(item, dict):
+                                    val = item.get('value')
+                                    if val is not None:
+                                        try:
+                                            allowed_values.add(int(str(val), 0))
+                                        except (ValueError, TypeError):
+                                            pass
+                                else:
+                                    # Simple list item, index is the value
+                                    allowed_values.add(idx)
+                    else:
+                        # Fallback to Min/Max if no valuelist
 
-                    if 'max' in reg_info and reg_info['max'] is not None:
-                        try:
-                            max_val = int(str(reg_info['max']), 0)
-                        except (ValueError, TypeError):
-                            pass
+                        # Calculate width limit first
+                        width_limit = 0xFF
+                        if 'width' in reg_info and reg_info['width'] is not None:
+                            try:
+                                w_val = int(str(reg_info['width']), 0)
+                                if 0 <= w_val < 8:
+                                    width_limit = (1 << w_val) - 1
+                            except (ValueError, TypeError):
+                                pass
+
+                        if 'min' in reg_info and reg_info['min'] is not None:
+                            try:
+                                min_val = int(str(reg_info['min']), 0)
+                            except (ValueError, TypeError):
+                                pass
+
+                        if 'max' in reg_info and reg_info['max'] is not None:
+                            try:
+                                max_val = int(str(reg_info['max']), 0)
+                            except (ValueError, TypeError):
+                                pass
+
+                        # Apply width limit to upper bound
+                        max_val = min(max_val, width_limit)
+
                 # 3. Validate input value
                 input_str = str(_new_val).strip()
                 if input_str and input_str.lower().startswith('0x'):
@@ -586,7 +747,17 @@ class RegistersTab(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
                     try:
                         val_int = int(input_str, 16)
 
-                        if min_val <= val_int <= max_val:
+                        is_valid = False
+                        if allowed_values is not None:
+                            # If valuelist exists, value must be in list AND within byte range
+                            if val_int in allowed_values and 0x00 <= val_int <= 0xFF:
+                                is_valid = True
+                        else:
+                            # Standard Min/Max check
+                            if min_val <= val_int <= max_val:
+                                is_valid = True
+
+                        if is_valid:
                             # 5. Update Value and Sync Marker
                             formatted_hex = f'0x{val_int:02X}'
 
@@ -604,6 +775,11 @@ class RegistersTab(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
                                     reg_info['value'] = formatted_hex
                                     reg_info['to_sync'] = vscp.mdf.sync_write
 
+                                # Refresh info panel if current selection matches edited cell
+                                # This handles immediate update of the right panel when treeview changes # pylint: disable=line-too-long
+                                if row_id == self.registers.treeview.focus():
+                                    self._update_registers_info(None)
+
                             result = formatted_hex
                     except ValueError:
                         pass # result remains False
@@ -613,43 +789,324 @@ class RegistersTab(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
         return result
 
 
-    def _update_registers_info(self, _):
+    def _update_registers_info(self, _): # pylint: disable=too-many-branches, too-many-locals
         """
-        Updates the information textbox based on the selected register.
+        Updates the information widget based on the selected register.
 
-        Retrieves details for the selected item in the treeview and displays
-        them in the side panel.
+        Retrieves details for the selected item in the treeview and updates
+        the ScrollableInfoTable with properly formatted data.
 
         Args:
             _: The event object (unused).
         """
+        def format_hex(value):
+            """Helper to safely format a value to HEX string. Returns None if value is missing."""
+            if value is None or value == "":
+                return None
+            try:
+                # Handle int or string input (e.g. "0x10" or 16)
+                if isinstance(value, str):
+                    val_int = int(value, 0) # Handles "0x" prefix automatically
+                else:
+                    val_int = int(value)
+                return f"0x{val_int:02X}"
+            except (ValueError, TypeError):
+                return str(value)
+
+        # Clear info panel first
+        self.registers_info.update_data({})
+        for widget in self.dynamic_frame.winfo_children():
+            widget.destroy()
+        self.dynamic_frame.grid_remove()
+
         try:
             item = self.registers.treeview.focus()
             item_dict = self.registers.treeview.item(item)
             parent_id = self.registers.treeview.parent(item)
-            self.registers_info.configure(state='normal')
-            self.registers_info.delete("0.0", "end")
+
             if parent_id:
                 parent_text = self.registers.treeview.item(parent_id, 'text')
-                page = int(parent_text.split(' ')[1])
+
+                if 'Page' in parent_text:
+                    page = int(parent_text.split(' ')[1])
+                else:
+                    page = -1 # Standard regs
+
                 register = int(item_dict['text'], 16)
                 data = self.registers_data[page][register]
 
-                self.registers_info.insert("end", data['name'] + "\n", 'bold')
-                self.registers_info.insert("end", "\n")
-                self.registers_info.insert("end", "Page:     " + str(page) + "\n")
-                self.registers_info.insert("end", "Register: " + f"0x{register:02X} ({register})" + "\n") # pylint: disable=line-too-long
-                self.registers_info.insert("end", "Access:   " + data['access'] + "\n")
-                self.registers_info.insert("end", "Value:    " + f"0x{data['value']:02X} ({data['value']})" + "\n") # pylint: disable=line-too-long
-                self.registers_info.insert("end", "\n")
-                self.registers_info.insert("end", data['description'])
+                # Prepare rows dynamically
+                rows = [
+                    ("<b>Page</b>:", str(page) if page >= 0 else "0"),
+                    ("<b>Register</b>:", f"0x{register:02X}")
+                ]
 
-            self.registers_info.configure(state='disabled')
+                if data.get('access'):
+                    rows.append(("<b>Access</b>:", str(data.get('access'))))
+
+                if data.get('width') is not None:
+                    rows.append(("<b>Width</b>:", str(data.get('width'))))
+
+                if (min_val := format_hex(data.get('min'))) is not None:
+                    rows.append(("<b>Min value</b>:", min_val))
+
+                if (max_val := format_hex(data.get('max'))) is not None:
+                    rows.append(("<b>Max value</b>:", max_val))
+
+                if (default_val := format_hex(data.get('default'))) is not None:
+                    rows.append(("<b>Default value</b>:", default_val))
+
+                if (curr_val := format_hex(data.get('value'))) is not None:
+                    rows.append(("<b>Value</b>:", curr_val))
+
+                # Prepare dictionary for ScrollableInfoTable
+                table_data = {
+                    "header": '<b>' + data.get('name', '') + '</b>',
+                    "rows": rows,
+                    "footer": data.get('description', '')
+                }
+
+                self.registers_info.update_data(table_data)
+
+                # --- Create Dynamic Widgets (ComboBox/CheckBoxes) ---
+                self._create_dynamic_widgets(data, page, register)
+
         except (ValueError, KeyError, IndexError):
             pass
 
 
-    def _show_menu(self, event, menu):
+    def _create_dynamic_widgets(self, data, page, register): # pylint: disable=too-many-locals, too-many-branches, too-many-statements
+        """
+        Creates dynamic widgets (ComboBox for valuelist, CheckBoxes for bits)
+        based on the register data.
+
+        Args:
+            data (dict): The data dictionary for the specific register from MDF.
+            page (int): The page number of the register.
+            register (int): The address of the register.
+        """
+        for widget in self.dynamic_frame.winfo_children():
+            widget.destroy()
+
+        self.dynamic_frame.grid_remove()
+
+        current_val_int = 0
+        try:
+            current_val_int = int(str(data.get('value', '0')), 0)
+        except (ValueError, TypeError):
+            pass
+
+        has_dynamic_content = False
+
+        # 1. Valuelist (ComboBox)
+        if 'valuelist' in data and data['valuelist']:
+            # Assume valuelist is a dict {val: {'name': '...', 'description': '...'}}
+            # or map where we can extract name and value.
+            values_map = {} # Name -> Value
+            name_desc_map = {} # Name -> Description
+            combo_values = []
+
+            # Determine the selected name based on current value
+            current_selection = ""
+
+            # Prepare iterable items to handle both dict and list
+            raw_valuelist = data['valuelist']
+            valuelist_items = []
+
+            if isinstance(raw_valuelist, dict):
+                valuelist_items = raw_valuelist.items()
+            elif isinstance(raw_valuelist, list):
+                # If list, we assume it contains dicts with 'value' key,
+                # or we treat index as value if simple strings.
+                for idx, item in enumerate(raw_valuelist):
+                    if isinstance(item, dict):
+                        # Try to get explicit value, else skip or use index?
+                        val = item.get('value')
+                        if val is not None:
+                            valuelist_items.append((val, item))
+                    else:
+                        # Assume simple list of names corresponding to 0, 1, 2...
+                        valuelist_items.append((idx, {'name': str(item)}))
+
+            # Iterate through normalized items
+            for val_key, val_data in valuelist_items:
+                try:
+                    val_int = int(str(val_key), 0)
+
+                    # Handle if val_data is just a string (name) or a dict
+                    if isinstance(val_data, dict):
+                        name = val_data.get('name', str(val_int))
+                        desc = val_data.get('description', '')
+                    else:
+                        name = str(val_data)
+                        desc = ''
+
+                    values_map[name] = val_int
+                    name_desc_map[name] = desc
+                    combo_values.append(name)
+
+                    if val_int == current_val_int:
+                        current_selection = name
+                except (ValueError, TypeError):
+                    continue
+
+            if combo_values:
+                # Callback for ComboBox
+                def on_combo_change(choice):
+                    if choice in values_map:
+                        new_val = values_map[choice]
+                        self._update_register_value_from_widget(page, register, new_val)
+
+                combobox = ctk.CTkComboBox(self.dynamic_frame,
+                                           values=combo_values,
+                                           command=on_combo_change,
+                                           state="readonly",
+                                           width=330,
+                                           bg_color=self.container_bg_color,
+                                           fg_color=self.container_bg_color)
+                combobox.pack(side='top', fill='x', padx=5, pady=5)
+
+                if current_selection:
+                    combobox.set(current_selection)
+                    if current_selection in name_desc_map and name_desc_map[current_selection]:
+                        ToolTip(combobox, name_desc_map[current_selection])
+                elif combo_values:
+                    combobox.set(combo_values[0]) # Default first if no match
+
+                has_dynamic_content = True
+
+        # 2. Bits (CheckBoxes)
+        elif 'bits' in data and data['bits']:
+            width = 8
+            if data.get('width'):
+                try:
+                    width = int(data['width'])
+                except (ValueError, TypeError):
+                    pass
+
+            # Normalize bits to dictionary {index: info} to handle lists and dicts
+            bits_map = {}
+            raw_bits = data['bits']
+
+            if isinstance(raw_bits, dict):
+                for k, v in raw_bits.items():
+                    try:
+                        bits_map[int(k)] = v
+                    except (ValueError, TypeError):
+                        pass
+            elif isinstance(raw_bits, list):
+                for idx, item in enumerate(raw_bits):
+                    # Assume list index corresponds to bit index
+                    bits_map[idx] = item
+
+            # Create checkboxes from MSB (width-1) down to LSB (0)
+            for i in range(width - 1, -1, -1):
+                # Lookup in normalized map (handles int keys from normalization)
+                bit_info = bits_map.get(i)
+
+                if bit_info:
+                    # Handle if bit_info is just a string or dict
+                    if isinstance(bit_info, dict):
+                        name = bit_info.get('name', f'Bit {i}')
+                        desc = bit_info.get('description', '')
+                    else:
+                        name = str(bit_info)
+                        desc = ''
+
+                    is_checked = (current_val_int >> i) & 1
+
+                    # We use ctk variable to track state
+                    chk_var = ctk.IntVar(value=is_checked)
+
+                    def on_chk_cmd(var=chk_var, bit_idx=i):
+                        new_bit_val = var.get()
+                        try:
+                            curr = int(str(self.registers_data[page][register].get('value', '0')), 0) # pylint: disable=line-too-long
+                        except: # pylint: disable=bare-except
+                            curr = 0
+
+                        if new_bit_val:
+                            new_reg_val = curr | (1 << bit_idx)
+                        else:
+                            new_reg_val = curr & ~(1 << bit_idx)
+
+                        self._update_register_value_from_widget(page, register, new_reg_val)
+
+                    chk = ctk.CTkCheckBox(self.dynamic_frame, text=name,
+                                          variable=chk_var,
+                                          command=on_chk_cmd,
+                                          onvalue=1, offvalue=0,
+                                          bg_color=self.container_bg_color)
+                    chk.pack(side='top', anchor='w', padx=5, pady=(1, (1 if i > 0 else 5)))
+
+                    if desc:
+                        ToolTip(chk, desc)
+
+                    has_dynamic_content = True
+
+        # Only pack the frame if there is content
+        if has_dynamic_content:
+            self.dynamic_frame.grid(row=1, column=0, sticky="ew", padx=5, pady=5)
+
+
+    def _update_register_value_from_widget(self, page, register, new_int_value):
+        """
+        Updates the register value from a dynamic widget interaction.
+        Updates internal data, treeview, and the info panel.
+        """
+        hex_val = f'0x{new_int_value:02X}'
+
+        # 1. Update internal data
+        if page in self.registers_data and register in self.registers_data[page]:
+            self.registers_data[page][register]['value'] = hex_val
+            self.registers_data[page][register]['to_sync'] = vscp.mdf.sync_write
+
+        # 2. Update Treeview
+        self._update_treeview_value(page, register, hex_val, set_sync=vscp.mdf.sync_write)
+
+        # 3. Refresh Info Panel Text (specifically the "Value" field)
+        # Re-fetch data for panel
+        data = self.registers_data[page][register]
+
+        # Helper format (duplicate logic, could be method)
+        def format_hex(value):
+            if value is None or value == "":
+                return None
+            try:
+                if isinstance(value, str):
+                    val_int = int(value, 0)
+                else:
+                    val_int = int(value)
+                return f"0x{val_int:02X}"
+            except: # pylint: disable=bare-except
+                return str(value)
+
+        rows = [
+            ("Page:", str(page)),
+            ("Register:", f"0x{register:02X}")
+        ]
+        if data.get('access'):
+            rows.append(("Access:", str(data.get('access'))))
+        if data.get('width') is not None:
+            rows.append(("Width:", str(data.get('width'))))
+        if (min_val := format_hex(data.get('min'))) is not None:
+            rows.append(("Min:", min_val))
+        if (max_val := format_hex(data.get('max'))) is not None:
+            rows.append(("Max:", max_val))
+        if (default_val := format_hex(data.get('default'))) is not None:
+            rows.append(("Default val.:", default_val))
+        if (curr_val := format_hex(data.get('value'))) is not None:
+            rows.append(("Value:", curr_val))
+
+        table_data = {
+            "header": data.get('name', ''),
+            "rows": rows,
+            "footer": data.get('description', '')
+        }
+        self.registers_info.update_data(table_data)
+
+
+    def _show_menu(self, event, menu): # pylint: disable=too-many-locals, too-many-branches
         """
         Display the context menu on right-click.
 
@@ -676,20 +1133,52 @@ class RegistersTab(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
         state_read_sel = 'normal' if len(selected_registers) > 0 else 'disabled'
         self.dropdown_bt_read_selected.configure(state=state_read_sel)
 
+        # --- Check Modification Status via registers_data ---
+        any_modified = False
+        selected_modified = False
+
+        # Check globally modified
+        for page_data in self.registers_data.values():
+            for reg_data in page_data.values():
+                if reg_data.get('to_sync') == vscp.mdf.sync_write:
+                    any_modified = True
+                    break
+            if any_modified:
+                break
+
+        # Check selected modified
+        if selected_registers:
+            for item_id in selected_registers:
+                parent_id = self.registers.treeview.parent(item_id)
+                if not parent_id:
+                    continue
+
+                parent_text = self.registers.treeview.item(parent_id, 'text')
+                # Parse Page
+                if 'Page' in parent_text:
+                    try:
+                        page = int(parent_text.split(' ')[1])
+                    except IndexError:
+                        continue
+                else:
+                    page = -1
+
+                item_text = self.registers.treeview.item(item_id, 'text')
+                try:
+                    addr = int(item_text, 16)
+                    if page in self.registers_data and addr in self.registers_data[page]:
+                        if self.registers_data[page][addr].get('to_sync') == vscp.mdf.sync_write:
+                            selected_modified = True
+                            break
+                except ValueError:
+                    continue
+
         # 3. Write all registers - active only if any register is modified
-        # Get all modified cells: list of (row_id, column_key) tuples
-        modified_cells = self.registers.get_modified_cells()
-        state_write_all = 'normal' if len(modified_cells) > 0 else 'disabled'
+        state_write_all = 'normal' if any_modified else 'disabled'
         self.dropdown_bt_write_all.configure(state=state_write_all)
 
         # 4. Write selected registers - active only if any selected register is modified
-        # We need to check if any of the selected row IDs are present in the modified cells list
-        modified_row_ids = {cell[0] for cell in modified_cells} # Extract just row IDs from (id, col) tuples # pylint: disable=line-too-long
-        selected_row_ids = set(selection)
-
-        # Intersection determines if any selected row is also modified
-        is_any_selected_modified = not modified_row_ids.isdisjoint(selected_row_ids)
-        state_write_sel = 'normal' if is_any_selected_modified else 'disabled'
+        state_write_sel = 'normal' if selected_modified else 'disabled'
         self.dropdown_bt_write_selected.configure(state=state_write_sel)
 
         if '' != self.selected_row_id:

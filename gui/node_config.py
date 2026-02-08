@@ -16,6 +16,7 @@ import os
 import customtkinter as ctk
 import vscp
 from .tab_registers import RegistersTab
+from .info_widget import ScrollableInfoTable
 
 
 def new_tag_config(self, tagName, **kwargs): # pylint: disable=invalid-name
@@ -63,8 +64,8 @@ class NodeConfiguration: # pylint: disable=too-many-instance-attributes, too-few
         """
         super().__init__()
         self.window = ctk.CTkToplevel(parent)
-        self.width = 1050
-        self.height = 650
+        self.width = 1150
+        self.height = 770
         self.parent = parent
         self.node_id = node_id
 
@@ -90,8 +91,9 @@ class NodeConfiguration: # pylint: disable=too-many-instance-attributes, too-few
 
         self.config = ConfigPanel(self.config_panel, self.node_id)
 
-        self.info_panel = ctk.CTkFrame(self.config_panel, height=150)
+        self.info_panel = ctk.CTkFrame(self.config_panel, height=235)
         self.info_panel.pack(padx=5, pady=(0, 5), side='top', anchor='s', fill='both', expand=False)
+        self.info_panel.pack_propagate(False)
 
         self.info = InfoPanel(self.info_panel)
         self.info.display({**vscp.mdf.get_module_info(), **vscp.mdf.get_boot_algorithm()})
@@ -147,57 +149,54 @@ class InfoPanel(ctk.CTkFrame): # pylint: disable=too-many-ancestors
         self.parent = parent
         super().__init__(self.parent)
 
-        font = ctk.CTkFont(family='TkDefaultFont', size=15)
-        bold_font = ctk.CTkFont(family='TkDefaultFont', size=15, weight='bold')
-        temp_fg_color = tuple(self._fg_color) if isinstance(self._fg_color, list) else self._fg_color # pylint: disable=line-too-long
-        self.module_info = ctk.CTkTextbox(self.parent, font=font, border_spacing=1, fg_color=temp_fg_color) # pylint: disable=line-too-long
+        # Retrieve the bg color from the parent widget to ensure visual consistency
+        # when ScrollableInfoTable is placed inside it.
+        bg_color = self.parent.cget("fg_color")
+
+        self.module_info = ScrollableInfoTable(
+            self.parent,
+            data={},
+            font_size=11,
+            col1_width=190,
+            fg_color=bg_color,
+            corner_radius=0
+        )
         self.module_info.pack(padx=(5, 5), pady=(5, 5), side='top', anchor='nw', fill='both', expand=True) # pylint: disable=line-too-long
-        self.module_info.bind("<Button-1>", lambda e: 'break')
-        self.module_info.configure(state='disabled')
-        self.module_info.tag_config('bold', font=bold_font)
 
 
     def display(self, data: dict) -> None:
         """
-        Populates the text box with formatted module information.
-
-        Iterates through defined keys, retrieving values from the provided data
-        dictionary and inserting them into the text widget with styling.
+        Populates the ScrollableInfoTable with module information.
 
         Args:
             data (dict): Dictionary containing module information.
         """
-        self.module_info.configure(state='normal')
-        self.module_info.delete('1.0', 'end')
-        if 0 != len(data):
-            keys = [{'name':        ['Name',                    'br',   None]},
-                    {'model':       ['Model',                   'br',   None]},
-                    {'version':     ['Version',                 'br',   None]},
-                    {'level':       ['VSCP level',              '',     None]},
-                    {'buffersize':  ['max VSCP event size',     '',     None]},
-                    {'changed':     ['Date',                    'br',   None]},
-                    {'algorithm':   ['Bootloader Algorithm',    '',     vscp.dictionary.convert_blalgo]}, # pylint: disable=line-too-long
-                    {'blockcount':  ['Firmware memory blocks',  '',     None]},
-                    {'blocksize':   ['Memory block size',       'br',   None]},
-                    {'infourl':     ['Homepage',                'br',   None]},
-                    {'description': ['Description',             'eof',  None]}]
-            for key in keys:
-                data_key = next(iter(key))
+        rows = []
+        if data:
+            # Structure: (data_key, label_text, converter_function)
+            keys = [('name',        '<b>Name</b>',                      None),
+                    ('model',       '<b>Model</b>',                     None),
+                    ('version',     '<b>Version</b>',                   None),
+                    ('level',       '<b>VSCP level</b>',                None),
+                    ('buffersize',  '<b>max VSCP event size</b>',       None),
+                    ('changed',     '<b>Date</b>',                      None),
+                    ('algorithm',   '<b>Bootloader Algorithm</b>',      vscp.dictionary.convert_blalgo), # pylint: disable=line-too-long
+                    ('blockcount',  '<b>Firmware memory blocks</b>',    None),
+                    ('blocksize',   '<b>Memory block size</b>',         None),
+                    ('infourl',     '<b>Homepage</b>',                  None),
+                    ('description', '<b>Description</b>',               None)]
+
+            for data_key, label_text, converter in keys:
                 val = data.get(data_key, None)
                 if val is not None:
-                    info = key[data_key][0] + ': '
-                    self.module_info.insert('end', info, 'bold')
-                    info = str(val) if key[data_key][2] is None else key[data_key][2]([int(val)], None) # pylint: disable=line-too-long
-                    info += ' '
-                    if 'br' in key[data_key][1]:
-                        info += os.linesep
-                    elif 'eof' not in key[data_key][1]:
-                        info += '| '
-                    self.module_info.insert('end', info)
-        self.module_info.configure(state='disabled')
+                    label = label_text + ':'
+                    value_str = str(val) if converter is None else converter([int(val)], None)
+                    rows.append((label, value_str))
+
+        self.module_info.update_data({'rows': rows})
 
 
-class ConfigPanel(ctk.CTkFrame):
+class ConfigPanel(ctk.CTkFrame): # pylint: disable=too-many-ancestors
     """
     Main configuration panel containing tabs for different settings categories.
 
