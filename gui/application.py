@@ -38,7 +38,7 @@ class Application(ctk.CTk): # pylint: disable=too-few-public-methods
         super().__init__()
         self.width = 1552
         self.height = 700
-        self.version = '0.83'
+        self.version = '0.84'
 
         current_path = os.path.dirname(os.path.realpath(__file__))
         icon_dir = os.path.join(current_path, 'icons')

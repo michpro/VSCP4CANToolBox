@@ -20,6 +20,7 @@ from vscp import dictionary
 from .treeview import CTkTreeview
 from .common import add_event_info_handle, event_info_handle
 from .popup import CTkFloatingWindow
+from .message_filters import MessageFilters
 
 
 class Messages(ctk.CTkFrame): # pylint: disable=too-many-ancestors
@@ -41,6 +42,7 @@ class Messages(ctk.CTkFrame): # pylint: disable=too-many-ancestors
         """
         super().__init__(parent)
 
+        # Header structure: (id, text, width, minwidth, anchor, cell_anchor)
         header = [('', '', 0, 0, 'center', 'w'),
                   ('timestamp', 'Time', 105, 105, 'center', 'w'),
                   ('dir', 'DIR', 25, 25, 'center', 'center'),
@@ -201,7 +203,7 @@ class EventInfo(ctk.CTkFrame): # pylint: disable=too-few-public-methods, too-man
         font = ctk.CTkFont(family='Ubuntu Mono', size=16)
         temp_fg_color = tuple(self._fg_color) if isinstance(self._fg_color, list) else self._fg_color
         self.event_info_box = ctk.CTkTextbox(self.parent, font=font, border_spacing=1, width=480, fg_color=temp_fg_color)
-        self.event_info_box.pack(padx=(5, 0), pady=(5, 5), side='top', anchor='nw', fill='y', expand=False)
+        self.event_info_box.pack(padx=(5, 5), pady=(5, 5), side='top', anchor='nw', fill='both', expand=True)
         self.event_info_box.bind("<Button-1>", lambda e: 'break')
         self.event_info_box.configure(state='disabled')
         # pylint: enable=line-too-long
@@ -240,7 +242,8 @@ class RightPanel(ctk.CTkFrame): # pylint: disable=too-few-public-methods, too-ma
     """
     Main container for the right panel of the application.
 
-    Holds the Messages widget (the log list) and the EventInfo widget (the detail view).
+    Holds the Messages widget (the log list), the EventInfo widget (the detail view),
+    and the MessageFilters widget.
     """
 
     def __init__(self, parent):
@@ -258,8 +261,26 @@ class RightPanel(ctk.CTkFrame): # pylint: disable=too-few-public-methods, too-ma
 
         self.messages = Messages(self.widget)
 
-        self.info_panel = ctk.CTkFrame(self.widget, height=150)
-        self.info_panel.pack(padx=(2, 6), pady=(1, 5), side='top', anchor='s', fill='both', expand=False) # pylint: disable=line-too-long
+        self.bottom_container = ctk.CTkFrame(self.widget, height=150, fg_color="transparent")
+        self.bottom_container.pack_propagate(False)
+        self.bottom_container.pack(side='top', fill='x', expand=False, padx=(2, 5), pady=(0, 10))
+
+        self.info_panel = ctk.CTkFrame(self.bottom_container)
+        self.info_panel.pack(side='left', fill='both', expand=True, padx=0)
+
+        self.filter_panel = ctk.CTkFrame(self.bottom_container)
+        self.filter_panel.pack(side='left', fill='both', expand=True, padx=(5, 0))
 
         self.info = EventInfo(self.info_panel)
         add_event_info_handle(self.info)
+
+        # Initialize the filter configuration window (hidden by default)
+        self.filters_window = MessageFilters(self, self.messages.messages)
+
+        # pylint: disable=line-too-long
+        ctk.CTkLabel(self.filter_panel, text="Filters:", anchor="w").pack(side="left", fill="x", padx=(15, 5), pady=5, anchor="n")
+        ctk.CTkButton(self.filter_panel, text="Configure", width=120, command=self.filters_window.deiconify).pack(side="left", padx=0, pady=5, anchor="n")
+        ctk.CTkButton(self.filter_panel, text="Apply", width=120, command=self.filters_window.apply_filter, fg_color="green").pack(side="left", padx=(3, 0), pady=5, anchor="n")
+        ctk.CTkButton(self.filter_panel, text="Clear", width=120, command=self.filters_window.clear_filter, fg_color="gray").pack(side="left", padx=(3, 0), pady=5, anchor="n")
+        ctk.CTkButton(self.filter_panel, text="Hide All", width=120, command=self.filters_window.block_all, fg_color="#C0392B").pack(side="left", padx=(3, 0), pady=5, anchor="n")
+        # pylint: enable=line-too-long

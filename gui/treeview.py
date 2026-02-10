@@ -69,6 +69,7 @@ class CTkTreeview(ctk.CTkFrame): # pylint: disable=too-many-ancestors, too-many-
         self.input_validation = None # Callback for Entry keystroke validation
         self._hidden_items = [] # List to store hidden items: (item_id, parent_id, index)
         self._modified_cells = set() # Set to store (item_id, column_key) of modified cells
+        self._filter_condition = None # Function to check if item should be visible
         super().__init__(self.parent)
 
         self.bg_color = self.parent._apply_appearance_mode(ctk.ThemeManager.theme['CTkFrame']['fg_color'])
@@ -174,6 +175,7 @@ class CTkTreeview(ctk.CTkFrame): # pylint: disable=too-many-ancestors, too-many-
     def insert_items(self, items, parent=''):
         """
         Recursive method to insert items into the treeview.
+        Applies active filter to new items (hides them if they don't match).
 
         Args:
             items: List of dictionaries representing rows and children.
@@ -184,9 +186,20 @@ class CTkTreeview(ctk.CTkFrame): # pylint: disable=too-many-ancestors, too-many-
                 text = item['text'] if 'text' in item else ''
                 values = item['values'] if 'values' in item else []
                 row = self.treeview.insert(parent, 'end', text=text, values=values)
+
+                # Check active filter for the new item
+                if self._filter_condition is not None:
+                    if not self._filter_condition(text, values):
+                        idx = self.treeview.index(row)
+                        self.treeview.detach(row)
+                        self._hidden_items.append((row, parent, idx))
+
                 if 'child' in item:
                     self.insert_items(item['child'], row)
-                self.treeview.see(self.treeview.get_children()[-1])
+
+                # Only scroll to see if item is actually visible
+                if self.treeview.exists(row):
+                    self.treeview.see(row)
 
 
     def delete_all_items(self):
@@ -405,13 +418,18 @@ class CTkTreeview(ctk.CTkFrame): # pylint: disable=too-many-ancestors, too-many-
 
         Rows that do not satisfy the condition_func will be hidden (detached).
         This method first restores all previously hidden items to ensure
-        the filter is applied to the full dataset.
+        the filter is applied to the full dataset. It also saves the condition
+        for future insertions.
 
         Args:
             condition_func: A function that takes (text, values) and returns bool.
                             True = Show row, False = Hide row.
         """
+        # Restore items and clear previous filter condition
         self.clear_filters()
+
+        # Set new filter condition
+        self._filter_condition = condition_func
 
         # Retrieve all items recursively to check against the filter
         # We need to collect IDs first, then process, to avoid issues while modifying the tree
@@ -445,8 +463,17 @@ class CTkTreeview(ctk.CTkFrame): # pylint: disable=too-many-ancestors, too-many-
         """
         Clear active filters and restore all hidden items.
         """
+        self._filter_condition = None
+
         if not self._hidden_items:
             return
+
+        # Reverse hidden items list before sorting.
+        # This ensures that for items with the same index (e.g. appended while filtered),
+        # they are restored in LIFO order (Last In, First Out relative to the hidden stack),
+        # which effectively puts them back in FIFO order (First In, First Out) into the tree
+        # because inserting at index X pushes previous items at X down.
+        self._hidden_items.reverse()
 
         # Sort hidden items by index to attempt maintaining relative order upon restoration
         self._hidden_items.sort(key=lambda x: x[2])
