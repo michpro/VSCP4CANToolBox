@@ -20,6 +20,7 @@ _neighbours_handle: object = None
 _event_info_handle: object = None
 _nodes: dict = {}
 _progress_observers: list = []
+_filter_blocking_observers = []
 
 
 def add_progress_observer(observer) -> None:
@@ -143,3 +144,20 @@ def get_nodes() -> dict:
         dict: The dictionary containing all node info.
     """
     return _nodes
+
+
+def add_filter_blocking_observer(callback):
+    """
+    Register a callback to be notified when filters should be blocked/unblocked.
+    """
+    _filter_blocking_observers.append(callback)
+
+
+def call_set_filter_blocking(block: bool):
+    """
+    Notify all observers to set filter blocking state.
+    Args:
+        block: True to block all, False to apply filters.
+    """
+    for callback in _filter_blocking_observers:
+        callback(block)

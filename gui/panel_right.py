@@ -18,7 +18,7 @@ from CTkMessagebox import CTkMessagebox
 import vscp
 from vscp import dictionary
 from .treeview import CTkTreeview
-from .common import add_event_info_handle, event_info_handle
+from .common import add_event_info_handle, event_info_handle, add_filter_blocking_observer
 from .popup import CTkFloatingWindow
 from .message_filters import MessageFilters
 
@@ -276,11 +276,54 @@ class RightPanel(ctk.CTkFrame): # pylint: disable=too-few-public-methods, too-ma
 
         # Initialize the filter configuration window (hidden by default)
         self.filters_window = MessageFilters(self, self.messages.messages)
+        self._filters_active = False
+
+        # Register callback to handle filter blocking requests from other modules
+        add_filter_blocking_observer(self._handle_filter_blocking)
 
         # pylint: disable=line-too-long
         ctk.CTkLabel(self.filter_panel, text="Filters:", anchor="w").pack(side="left", fill="x", padx=(15, 5), pady=5, anchor="n")
         ctk.CTkButton(self.filter_panel, text="Configure", width=120, command=self.filters_window.deiconify).pack(side="left", padx=0, pady=5, anchor="n")
-        ctk.CTkButton(self.filter_panel, text="Apply", width=120, command=self.filters_window.apply_filter, fg_color="green").pack(side="left", padx=(3, 0), pady=5, anchor="n")
-        ctk.CTkButton(self.filter_panel, text="Clear", width=120, command=self.filters_window.clear_filter, fg_color="gray").pack(side="left", padx=(3, 0), pady=5, anchor="n")
+        ctk.CTkButton(self.filter_panel, text="Apply", width=120, command=self._apply_filters, fg_color="green").pack(side="left", padx=(3, 0), pady=5, anchor="n")
+        ctk.CTkButton(self.filter_panel, text="Clear", width=120, command=self._clear_filters, fg_color="gray").pack(side="left", padx=(3, 0), pady=5, anchor="n")
         ctk.CTkButton(self.filter_panel, text="Hide All", width=120, command=self.filters_window.block_all, fg_color="#C0392B").pack(side="left", padx=(3, 0), pady=5, anchor="n")
         # pylint: enable=line-too-long
+
+
+    def _apply_filters(self):
+        """Apply filters and update state tracking."""
+        self._filters_active = True
+        self.filters_window.apply_filter()
+
+
+    def _clear_filters(self):
+        """Clear filters and update state tracking."""
+        self._filters_active = False
+        self.filters_window.clear_filter()
+
+
+    def _handle_filter_blocking(self, block: bool):
+        """
+        Callback to handle filter blocking requests from external modules.
+
+        Args:
+            block: True to block all messages (Hide All), False to restore filters.
+        """
+        if block:
+            self.filters_window.block_all()
+        else:
+            # Suspend geometry management (pack_forget) to prevent row-by-row rendering
+            # which causes visual lag ("slow unfolding") when restoring many items.
+            self.messages.widget.pack_forget()
+
+            try:
+                # Only re-apply filters if they were active before blocking
+                if self._filters_active:
+                    self.filters_window.apply_filter()
+                else:
+                    self.filters_window.clear_filter()
+            finally:
+                # Restore geometry
+                # IMPORTANT: Use 'before' to ensure it's placed above the bottom container,
+                # otherwise it will be appended to the bottom of the parent frame.
+                self.messages.widget.pack(padx=(0, 4), pady=4, fill='both', expand=True, before=self.bottom_container) # pylint: disable=line-too-long

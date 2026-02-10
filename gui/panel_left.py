@@ -23,7 +23,8 @@ from intelhex import IntelHex
 import vscp
 from .treeview import CTkTreeview
 from .common import add_set_state_callback, call_set_scan_widget_state,     \
-                    add_neighbours_handle, neighbours_handle
+                    add_neighbours_handle, neighbours_handle,               \
+                    call_set_filter_blocking
 from .popup import CTkFloatingWindow
 from .node_config import NodeConfiguration
 from .change_node_id import ChangeNodeId
@@ -33,7 +34,7 @@ class LeftPanel(ctk.CTkFrame):
     """
     Main container for the left panel of the application.
 
-    Holds the Neighbourhood widget and general command buttons (e.g., Send Host DateTime).
+    Holds the Neighbourhood widget and general command buttons.
     """
 
     def __init__(self, parent):
@@ -159,7 +160,6 @@ class ScanWidget(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
         """Format the Start ID input to hex style (e.g., 0x01) on key release."""
         input_str = self.min_id_var.get()
 
-        # Safety net: restore '0x' if validation was bypassed or failed
         if not input_str.lower().startswith('0x'):
             clean_hex = ''.join(filter(lambda x: x in '0123456789abcdefABCDEF', input_str))
             new_val = f'0x{clean_hex}'
@@ -181,30 +181,27 @@ class ScanWidget(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
         Returns:
             bool: True if input is valid, False otherwise.
         """
-        # 1. Protection against deleting '0x'
         if not input_str.lower().startswith('0x'):
             return False
 
-        # 2. Allow incomplete '0x' during editing
+        # Allow incomplete '0x' during editing
         if len(input_str) < 3:
             return True
 
         is_valid = False
         try: # pylint: disable=too-many-nested-blocks
-            # 3. Hex format validation
             val = int(input_str, 16)
 
-            # 4. Global range check (0-254)
+            # Global range check (0-254)
             if self.min_range[0] <= val <= self.min_range[1]:
                 is_valid = True
 
-                # 5. Cross-check: Start ID must be <= Stop ID
+                # Cross-check: Start ID must be <= Stop ID
                 if hasattr(self, 'max_id_var'):
                     try:
                         current_max_str = self.max_id_var.get()
                         if len(current_max_str) > 2:
                             max_val = int(current_max_str, 16)
-                            # Check strictly: input must not exceed Max ID
                             if val > max_val:
                                 is_valid = False
                     except ValueError:
@@ -221,7 +218,6 @@ class ScanWidget(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
         """Format the Stop ID input to hex style (e.g., 0xFF) on key release."""
         input_str = self.max_id_var.get()
 
-        # Safety net: restore '0x' if validation was bypassed or failed
         if not input_str.lower().startswith('0x'):
             clean_hex = ''.join(filter(lambda x: x in '0123456789abcdefABCDEF', input_str))
             new_val = f'0x{clean_hex}'
@@ -243,24 +239,22 @@ class ScanWidget(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
         Returns:
             bool: True if input is valid, False otherwise.
         """
-        # 1. Protection against deleting '0x'
         if not input_str.lower().startswith('0x'):
             return False
 
-        # 2. Allow incomplete '0x' during editing
+        # Allow incomplete '0x' during editing
         if len(input_str) < 3:
             return True
 
         is_valid = False
         try: # pylint: disable=too-many-nested-blocks
-            # 3. Hex format validation
             val = int(input_str, 16)
 
-            # 4. Global range check (0-254)
+            # Global range check (0-254)
             if self.max_range[0] <= val <= self.max_range[1]:
                 is_valid = True
 
-                # 5. Cross-check: Stop ID must be >= Start ID
+                # Cross-check: Stop ID must be >= Start ID
                 if hasattr(self, 'min_id_var'):
                     try:
                         current_min_str = self.min_id_var.get()
@@ -566,6 +560,8 @@ class Neighbours(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
 
         Opens a file dialog to select the firmware file (hex/bin) and initiates
         the async upload if confirmed.
+        Automatically blocks messages during upload and restores the filter afterwards
+        using the decoupled Observer pattern via 'common'.
         """
         node_id = self._get_node_id()
         if -1 < node_id:
@@ -581,7 +577,20 @@ class Neighbours(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
                     try:
                         fw.fromfile(fw_path, format=extension)
                         fw_data = fw.tobinarray().tolist()
-                        tae.async_execute(vscp.firmware_upload(node_id, fw_data), visible=False)
+
+                        # Define async task to handle filter toggling and upload via Observer
+                        async def _upload_task():
+                            # 1. Hide all messages (Publish event: Block=True)
+                            call_set_filter_blocking(True)
+
+                            try:
+                                # 2. Execute bootloader procedure
+                                await vscp.firmware_upload(node_id, fw_data)
+                            finally:
+                                # 3. Restore filter state (Publish event: Block=False)
+                                call_set_filter_blocking(False)
+
+                        tae.async_execute(_upload_task(), visible=False)
                     except ValueError:
                         pass
             else:
