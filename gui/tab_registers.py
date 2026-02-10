@@ -11,110 +11,14 @@ It handles displaying, reading, and writing VSCP registers using a Treeview.
 # pylint: disable=too-many-lines
 
 
-import tkinter as tk
 import customtkinter as ctk
 import tk_async_execute as tae
 import vscp
 from gui.common import update_progress
 from .info_widget import ScrollableInfoTable
 from .treeview import CTkTreeview
+from .tooltip import ToolTip
 from .popup import CTkFloatingWindow
-
-
-class ToolTip: # pylint: disable=too-many-instance-attributes
-    """
-    Creates a tooltip for a given widget as the user hovers the mouse cursor.
-    """
-
-    def __init__(self, widget, text):
-        """
-        Initializes the tooltip.
-
-        Args:
-            widget: The widget to bind the tooltip to.
-            text: The text to display in the tooltip.
-        """
-        self.widget = widget
-        self.text = text
-        self.tip_window = None
-        self.id = None
-        self.x = self.y = 0
-        self._id1 = self.widget.bind("<Enter>", self.enter)
-        self._id2 = self.widget.bind("<Leave>", self.leave)
-
-
-    def enter(self, _event=None):
-        """
-        Callback for mouse entering the widget. Schedules the tooltip display.
-        """
-        self.schedule()
-
-
-    def leave(self, _event=None):
-        """
-        Callback for mouse leaving the widget. Hides the tooltip.
-        """
-        self.unschedule()
-        self.hide_tip()
-
-
-    def schedule(self):
-        """
-        Schedules the tooltip to be displayed after a delay.
-        """
-        self.unschedule()
-        self.id = self.widget.after(500, self.show_tip)
-
-
-    def unschedule(self):
-        """
-        Cancels the scheduled tooltip display.
-        """
-        id_ = self.id
-        self.id = None
-        if id_:
-            self.widget.after_cancel(id_)
-
-
-    def show_tip(self, _event=None):
-        """
-        Creates and displays the tooltip window.
-        """
-        # Calculate position relative to the widget using winfo_root instead of bbox
-        x = self.widget.winfo_rootx() + 25
-        y = self.widget.winfo_rooty() + 20
-
-        # Check if text is valid
-        if self.text:
-            self.tip_window = tw = tk.Toplevel(self.widget)
-            tw.wm_overrideredirect(True)
-            tw.wm_geometry(f"+{x}+{y}")
-
-            # Attempt to set transparent background for the Toplevel window
-            # This removes the white rectangle behind rounded corners (mainly for Windows)
-            transparent_key = "#000001"
-            bg_fallback = "gray20"
-
-            try:
-                tw.wm_attributes("-transparentcolor", transparent_key)
-                tw.configure(bg=transparent_key)
-            except Exception: # pylint: disable=broad-exception-caught
-                # Fallback for systems that don't support -transparentcolor
-                tw.configure(bg=bg_fallback)
-
-            label = ctk.CTkLabel(tw, text=self.text, corner_radius=6,
-                                 fg_color="gray60", text_color="black", width=200, wraplength=190)
-            label.pack()
-
-
-    def hide_tip(self):
-        """
-        Destroys the tooltip window.
-        """
-        tw = self.tip_window
-        self.tip_window = None
-        if tw:
-            tw.destroy()
 
 
 class RegistersTab(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes, too-many-ancestors
@@ -130,8 +34,8 @@ class RegistersTab(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
         """
         Initializes the RegistersTab.
 
-        Sets up the treeview columns and layout. Loads register definitions
-        from the VSCP MDF and initiates the read of actual device values.
+        Sets up the treeview columns, layout, and loads register definitions
+        from the VSCP MDF.
 
         Args:
             parent: The parent widget (tab).
@@ -188,10 +92,9 @@ class RegistersTab(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
         temp_fg_color = tuple(self._fg_color) if isinstance(self._fg_color, list) else self._fg_color
         self.container_bg_color = temp_fg_color  # Store for dynamic widgets background inheritance
 
-        # Container frame for the info widget and potentially other future widgets
         self.info_container = ctk.CTkFrame(self.widget, width=350, fg_color=temp_fg_color)
         self.info_container.pack(padx=(5, 0), pady=0, side='right', anchor='ne', fill='y', expand=False)
-        self.info_container.grid_propagate(False) # Enforce width/height behavior
+        self.info_container.grid_propagate(False)
 
         # Use Grid layout for info_container to handle dynamic resizing properly
         self.info_container.grid_columnconfigure(0, weight=1)
@@ -200,7 +103,7 @@ class RegistersTab(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
 
         self.registers_info = ScrollableInfoTable(
             self.info_container,
-            data={}, # Initial empty data
+            data={},
             col1_width=110, # Fixed width for labels column
             font_size=11,
             fg_color=temp_fg_color
@@ -219,8 +122,7 @@ class RegistersTab(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
         Populates the register treeview with data.
 
         Iterates through the register data structure (organized by page and register address)
-        and inserts rows into the treeview. Displays address, access rights,
-        current value, sync status, and name.
+        and inserts rows into the treeview.
         """
         result = []
         for page, registers in self.registers_data.items():
@@ -238,8 +140,7 @@ class RegistersTab(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
 
     def _on_treeview_click(self, event):
         """
-        Handles click events on the treeview.
-        Deselects items if clicked on empty space.
+        Handles click events on the treeview to deselect items if clicked on empty space.
         """
         if not self.registers.treeview.identify_row(event.y):
             self.registers.treeview.selection_remove(self.registers.treeview.selection())
@@ -254,7 +155,6 @@ class RegistersTab(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
         Args:
             registers_map (dict): A dictionary where keys are page numbers (int)
                                   and values are lists of register addresses (int) to read.
-                                  Example: {0: [1, 2, 3], 1: [0, 10]}
             start_progress (float): Initial progress bar value (0.0 to 1.0).
         """
         vscp.set_async_work(True)
@@ -281,7 +181,7 @@ class RegistersTab(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
             if not addresses:
                 continue
 
-            # Logic to count chunks of contiguous registers (max size 4)
+            # Group contiguous registers into chunks (max size 4)
             current_chunk_len = 1
             current_reg = addresses[0]
             current_page_chunks = 1
@@ -296,7 +196,7 @@ class RegistersTab(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
                     current_reg = addr
             total_chunks += current_page_chunks
 
-        # Calculate progress step (remaining progress / total chunks)
+        # Calculate progress step
         step = (0.9 - start_progress) / total_chunks if total_chunks > 0 else 0
         progress = start_progress + (0.1 if start_progress == 0 else 0)
         update_progress(progress)
@@ -352,7 +252,6 @@ class RegistersTab(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
         Args:
             registers_map (dict): A dictionary where keys are page numbers (int)
                                   and values are dictionaries mapping address (int) to value (int).
-                                  Example: {0: {1: 0x10, 2: 0x20}}
         """
         vscp.set_async_work(True)
         update_progress(0.0)
@@ -583,12 +482,10 @@ class RegistersTab(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
         reg_text = f'0x{reg_addr:02X}'
         is_updated = False
 
-        # Find the parent item (Page)
         for page_item in self.registers.treeview.get_children():
             if is_updated:
                 break
             if self.registers.treeview.item(page_item, "text") == page_text:
-                # Find the child item (Register)
                 for reg_item in self.registers.treeview.get_children(page_item):
                     if self.registers.treeview.item(reg_item, "text") == reg_text:
                         self.registers.treeview.set(reg_item, column='value', value=hex_value)
@@ -618,9 +515,6 @@ class RegistersTab(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
         """
         result = False
         if col_key == 'value':
-            # Check access rights from row_data
-            # row_data contains keys defined in header:
-            # 'address', 'access', 'value', 'toSync', 'name'
             access_rights = str(row_data.get('access', '')).lower()
             if 'w' in access_rights:
                 result = True
@@ -813,7 +707,6 @@ class RegistersTab(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
             except (ValueError, TypeError):
                 return str(value)
 
-        # Clear info panel first
         self.registers_info.update_data({})
         for widget in self.dynamic_frame.winfo_children():
             widget.destroy()
@@ -835,7 +728,7 @@ class RegistersTab(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
                 register = int(item_dict['text'], 16)
                 data = self.registers_data[page][register]
 
-                # Prepare rows dynamically
+                # Prepare rows
                 rows = [
                     ("<b>Page</b>:", str(page) if page >= 0 else "0"),
                     ("<b>Register</b>:", f"0x{register:02X}")
@@ -906,7 +799,6 @@ class RegistersTab(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
             name_desc_map = {} # Name -> Description
             combo_values = []
 
-            # Determine the selected name based on current value
             current_selection = ""
 
             # Prepare iterable items to handle both dict and list
@@ -928,7 +820,6 @@ class RegistersTab(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
                         # Assume simple list of names corresponding to 0, 1, 2...
                         valuelist_items.append((idx, {'name': str(item)}))
 
-            # Iterate through normalized items
             for val_key, val_data in valuelist_items:
                 try:
                     val_int = int(str(val_key), 0)
@@ -1015,7 +906,6 @@ class RegistersTab(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
 
                     is_checked = (current_val_int >> i) & 1
 
-                    # We use ctk variable to track state
                     chk_var = ctk.IntVar(value=is_checked)
 
                     def on_chk_cmd(var=chk_var, bit_idx=i):
@@ -1119,11 +1009,9 @@ class RegistersTab(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
         # Cleanup any existing menu state
         self._close_popup()
 
-        # Determine status to enable/disable specific options
         selection = self.registers.treeview.selection()
 
         # Filter selection to include only registers (items that have a parent)
-        # Page items have no parent (parent returns '')
         selected_registers = [item for item in selection if self.registers.treeview.parent(item)]
 
         # 1. Read all registers - always active
@@ -1184,7 +1072,6 @@ class RegistersTab(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
         if '' != self.selected_row_id:
             menu.popup(event.x_root, event.y_root)
             # Bind click event to parent window to handle "click outside"
-            # Using add="+" to avoid overwriting existing bindings on the toplevel
             self._click_bind_id = self.widget.winfo_toplevel().bind("<Button-1>", self._close_popup, "+") # pylint: disable=line-too-long
 
 
@@ -1195,7 +1082,6 @@ class RegistersTab(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
         """
         if event:
             # If click occurred inside the dropdown frame, do not close
-            # This allows buttons inside the dropdown to function
             try:
                 if str(event.widget).startswith(str(self.dropdown.frame)):
                     return
