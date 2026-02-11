@@ -405,6 +405,59 @@ async def send_host_datetime():
     update_progress(1.0)
 
 
+async def drop_nickname_reset_device(nickname: int,
+                                     reset_keep_nickname: bool | None,
+                                     set_storage_default: bool | None,
+                                     go_idle_stop: bool | None,
+                                     wait_time: int | None):
+    # pylint: disable=line-too-long
+    """
+    Sends a DROP_NICKNAME event to a specific node, optionally configuring reset behavior.
+
+    This function sends an event (Class 1, Type 8) that allows dropping a nickname,
+    resetting the device, restoring factory defaults, or entering a low-power state.
+
+    Args:
+        nickname (int): The nickname of the target node.
+        reset_keep_nickname (bool | None): If True, the device should reset but keep its nickname.
+        set_storage_default (bool | None): If True, the device should restore its register/storage to factory defaults.
+        go_idle_stop (bool | None): If True, the device should enter idle/stop mode.
+        wait_time (int | None): Time in seconds to wait before executing the action (0-255).
+    """
+    # pylint: enable=line-too-long
+    global _async_work # pylint: disable=global-statement
+    update_progress(0.0)
+    if _async_work is False:
+        _async_work = True
+        vscp_msg = {
+            'class':        {'id': None,    'name': 'CLASS1.PROTOCOL'},
+            'type':         {'id': None,    'name': 'DROP_NICKNAME'},
+            'priority':     {'id': None,    'name': 'Lower'},
+            'nickName':     _this_nickname,
+            'isHardCoded':  False
+            }
+        update_progress(0.5)
+        vscp_msg['data'] = [nickname]
+        flags = 0x00
+        if reset_keep_nickname is not None and True is reset_keep_nickname:
+            flags |= (1 << 5)
+        if set_storage_default is not None and True is set_storage_default:
+            flags |= (1 << 6)
+        if go_idle_stop is not None and True is go_idle_stop:
+            flags |= (1 << 7)
+        if 0x00 != flags:
+            vscp_msg['data'] += [flags]
+        if wait_time is not None:
+            wait_time = max(min(0xFF, wait_time), 0x00)
+            if 0x00 != wait_time:
+                if 0x00 == flags:
+                    vscp_msg['data'] += [0x00]
+                vscp_msg['data'] += [wait_time]
+        _message.send(vscp_msg)
+        _async_work = False
+    update_progress(1.0)
+
+
 async def set_nickname(old_nickname: int, new_nickname: int) -> bool:
     """
     Attempts to change a node's nickname.

@@ -28,6 +28,7 @@ from .common import add_set_state_callback, call_set_scan_widget_state,     \
 from .popup import CTkFloatingWindow
 from .node_config import NodeConfiguration
 from .change_node_id import ChangeNodeId
+from .device_provisioner import DeviceProvisioner
 
 
 class LeftPanel(ctk.CTkFrame):
@@ -379,13 +380,16 @@ class Neighbours(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
         self.neighbours.treeview.bind('<Button-3>', lambda event: self._show_menu(event, self.dropdown))
 
         self.dropdown = CTkFloatingWindow(self.neighbours)
-        self.dropdown_bt_chg_node_id = ctk.CTkButton(self.dropdown.frame, border_spacing=0, corner_radius=0,
-                                                   text="Change Node ID", command=self._change_node_id)
+        self.dropdown_bt_chg_node_id = ctk.CTkButton(self.dropdown.frame, border_spacing=0, corner_radius=0, width=190,
+                                                     text="Change Node ID", command=self._change_node_id)
         self.dropdown_bt_chg_node_id.pack(expand=True, fill="x", padx=0, pady=0)
-        self.dropdown_bt_configure = ctk.CTkButton(self.dropdown.frame, border_spacing=0, corner_radius=0,
+        self.dropdown_bt_configure = ctk.CTkButton(self.dropdown.frame, border_spacing=0, corner_radius=0, width=190,
                                                    text="Configure Node", command=self._configure_node)
         self.dropdown_bt_configure.pack(expand=True, fill="x", padx=0, pady=0)
-        self.dropdown_bt_firmware = ctk.CTkButton(self.dropdown.frame, border_spacing=0, corner_radius=0,
+        self.dropdown_bt_drop_id_or_reset = ctk.CTkButton(self.dropdown.frame, border_spacing=0, corner_radius=0, width=190,
+                                                          text="Drop Node ID / Reset Device", command=self._drop_id_or_reset)
+        self.dropdown_bt_drop_id_or_reset.pack(expand=True, fill="x", padx=0, pady=0)
+        self.dropdown_bt_firmware = ctk.CTkButton(self.dropdown.frame, border_spacing=0, corner_radius=0, width=190,
                                                   text="Upload Firmware", command=self._firmware_upload)
         self.dropdown_bt_firmware.pack(expand=True, fill="x", padx=0, pady=0)
         # TODO remove
@@ -656,6 +660,32 @@ class Neighbours(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
                 CTkMessagebox(title='Error', message='Error while parsing an MDF file!!!', icon='cancel')
         else:
             CTkMessagebox(title='Error', message='No valid MDF file for the selected node!!!', icon='cancel')
+
+
+    def _drop_id_or_reset(self):
+        """
+        Handle dropping node ID or resetting the device.
+        Opens the DeviceProvisioner dialog to configure parameters.
+        """
+        node_id = self._get_node_id()
+        if node_id > -1:
+            DeviceProvisioner(cast(ctk.CTk, self.winfo_toplevel()), node_id, self._execute_drop_reset)
+        else:
+            CTkMessagebox(title='Error', message='Undefined Node ID!!!', icon='cancel')
+
+
+    def _execute_drop_reset(self, node_id, reset, defaults, idle, wait_time): # pylint: disable=too-many-arguments, too-many-positional-arguments
+        """
+        Callback to execute the Drop Nickname / Reset command asynchronously.
+
+        Args:
+            node_id (int): The target node.
+            reset (bool): Keep nickname (reset only).
+            defaults (bool): Restore storage to defaults.
+            idle (bool): Go to idle state.
+            wait_time (int): Delay before execution.
+        """
+        tae.async_execute(vscp.drop_nickname_reset_device(node_id, reset, defaults, idle, wait_time), visible=False)
 
 
     def _change_node_id(self):
