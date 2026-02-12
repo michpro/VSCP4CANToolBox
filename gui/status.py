@@ -59,6 +59,7 @@ class StatusFrame(ctk.CTkFrame): # pylint: disable=too-few-public-methods, too-m
         self.progress.pack(padx=(3, 0), pady=elements_pady, side='left', anchor='nw', fill='y', expand=False)
         self.progress.set(1)
         add_progress_observer(self.update_progress)
+
         btn_width = 42
         btn_height = elements_height
         btn_set = 0
@@ -94,6 +95,8 @@ class StatusFrame(ctk.CTkFrame): # pylint: disable=too-few-public-methods, too-m
                                          text="Search for Interfaces", command=self._phy_search_interfaces)
         dropdown_bt_scan.pack(expand=True, fill="x", padx=0, pady=0)
 
+        self._update_available_bitrates(phy.driver.interface)
+
         if not phy.driver.interfaces:
             self.phy_connect.configure(state='disabled')
         # pylint: enable=line-too-long
@@ -101,7 +104,7 @@ class StatusFrame(ctk.CTkFrame): # pylint: disable=too-few-public-methods, too-m
 
     def _phy_channels_configure(self):
         """Update the channel combo box based on the selected interface."""
-        self.phy_channel.configure(values=phy.driver.channels.keys())
+        self.phy_channel.configure(values=list(phy.driver.channels.keys()))
         self.phy_channel.set(phy.driver.channel)
 
 
@@ -114,20 +117,53 @@ class StatusFrame(ctk.CTkFrame): # pylint: disable=too-few-public-methods, too-m
         """
         phy.driver.find_interface_channels(phy.driver.interfaces[value])
         self._phy_channels_configure()
+        self._update_available_bitrates(value)
+
+
+    def _update_available_bitrates(self, interface_key):
+        """
+        Update the bitrate combo box values based on the selected interface.
+        Filters out unsupported bitrates (e.g., 83.3 kbps for slcan).
+
+        Args:
+            interface_key: The key of the selected interface (e.g., 'slcan', 'PCAN').
+        """
+        # Interface might not be available if not detected/initialized yet.
+        if interface_key not in phy.driver.interfaces:
+            return
+
+        interface_type = phy.driver.interfaces[interface_key]
+        bitrates = list(phy.driver.bitrates.keys())
+
+        # slcan firmware rarely supports 83.3 kbps standard CAN speed.
+        if interface_type == 'slcan' and '83.3 kbps' in bitrates:
+            bitrates.remove('83.3 kbps')
+
+        self.phy_bitrate.configure(values=bitrates)
+
+        # Reset to default or first available if current selection is invalid
+        if self.phy_bitrate.get() not in bitrates:
+            if phy.driver.default_bitrate_key in bitrates:
+                self.phy_bitrate.set(phy.driver.default_bitrate_key)
+            elif bitrates:
+                self.phy_bitrate.set(bitrates[0])
 
 
     def _phy_search_interfaces(self):
-        """Scan for available hardware interfaces."""
+        """Scan for available hardware interfaces and update UI accordingly."""
         phy.driver.find_interfaces()
         if phy.driver.interfaces:
-            self.phy_interface.configure(values=phy.driver.interfaces)
+            self.phy_interface.configure(values=list(phy.driver.interfaces.keys()))
             self.phy_interface.set(phy.driver.interface)
             self._phy_interface_selected(phy.driver.interface)
             self.phy_connect.configure(state='normal')
 
 
     def _phy_connect_switch(self):
-        """Toggle the connection state (Connect/Disconnect) for the selected interface."""
+        """
+        Toggle the PHY driver connection state (Connect/Disconnect).
+        Updates the UI elements and enables/disables scanning depending on state.
+        """
         if self.phy_connect_is_on:
             phy.driver.shutdown()
             img = self.img_off
@@ -144,6 +180,7 @@ class StatusFrame(ctk.CTkFrame): # pylint: disable=too-few-public-methods, too-m
             img = self.img_on
             state = 'disabled'
             call_set_scan_widget_state('normal')
+
         self._phy_iface_state(state)
         self.phy_connect.configure(image=img)
         self.phy_connect_is_on = not self.phy_connect_is_on
@@ -151,7 +188,7 @@ class StatusFrame(ctk.CTkFrame): # pylint: disable=too-few-public-methods, too-m
 
     def _phy_iface_state(self, state: str):
         """
-        Set the state of interface selection widgets.
+        Set the interactive state of interface selection widgets.
 
         Args:
             state: 'enable' or 'disabled'.
@@ -167,8 +204,8 @@ class StatusFrame(ctk.CTkFrame): # pylint: disable=too-few-public-methods, too-m
         Show the interface search context menu.
 
         Args:
-            event: Mouse event.
-            menu: The popup menu to show.
+            event: Mouse event triggering the menu.
+            menu: The popup menu widget to show.
         """
         try:
             if 'disabled' != self.phy_interface.cget('state'):
@@ -182,6 +219,6 @@ class StatusFrame(ctk.CTkFrame): # pylint: disable=too-few-public-methods, too-m
         Update the progress bar value.
 
         Args:
-            val: Progress value (0.0 to 1.0).
+            val: Progress value (float between 0.0 and 1.0).
         """
         self.progress.set(val)

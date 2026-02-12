@@ -38,7 +38,7 @@ class Application(ctk.CTk): # pylint: disable=too-few-public-methods
         super().__init__()
         self.width = 1552
         self.height = 700
-        self.version = '0.86'
+        self.version = '0.87'
 
         current_path = os.path.dirname(os.path.realpath(__file__))
         icon_dir = os.path.join(current_path, 'icons')
@@ -46,7 +46,6 @@ class Application(ctk.CTk): # pylint: disable=too-few-public-methods
         font_dir = os.path.join(current_path, 'fonts')
         font_path = os.path.join(font_dir, 'UbuntuMono-R.ttf')
         ctk.FontManager.load_font(font_path)
-
 
         if platform.system() == 'Windows':
             appid = 'MProVSCPToolBox'
@@ -79,7 +78,6 @@ class Application(ctk.CTk): # pylint: disable=too-few-public-methods
             msg (dict): The VSCP message dictionary.
         """
         self.app.right.messages.insert(self._prepare_data_to_show(msg))
-        # self.app.left.neighbourhood.scan_frame.check_node(msg['nickName']) # TODO remove or implement
 
 
     def _prepare_data_to_show(self, msg) -> list:
