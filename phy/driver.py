@@ -3,7 +3,7 @@ CAN Bus Driver Module.
 
 This module provides a wrapper around the python-can library to handle
 CAN bus communication. It supports interface detection (specifically for
-PCAN, GS_USB, and SLCAN devices), configuration, and lifecycle management
+PCAN, GS_USB, SLCAN, and SocketCAN), configuration, and lifecycle management
 of the bus connection.
 
 @file driver.py
@@ -11,23 +11,16 @@ of the bus connection.
 @license SPDX-License-Identifier: MIT
 """
 
-import os
+
 import platform
 import serial
 import serial.tools.list_ports
 from can.bus import BusState
 import can
 import usb.core
-import usb.backend.libusb1
+import usb.util
 import vscp
 
-_current_path = os.path.dirname(os.path.realpath(__file__))
-
-# Configure libusb backend for Windows environment
-if platform.system() == 'Windows':
-    _backend = usb.backend.libusb1.get_backend(find_library=lambda x:os.path.join(_current_path, 'libusb-1.0.dll')) # pylint: disable=line-too-long
-else:
-    _backend = None # pylint: disable=invalid-name
 
 class Driver: # pylint: disable=too-many-instance-attributes
     """
@@ -37,22 +30,21 @@ class Driver: # pylint: disable=too-many-instance-attributes
     bitrates, detects available interfaces, and sets up message notifications.
     """
 
+
     def __init__(self):
         """
         Initializes the Driver instance with default settings.
-
-        Sets up default bitrates, clears interface lists, and attempts
-        to auto-detect connected interfaces upon instantiation.
         """
         self.notifier = None
         self.is_phy_initialized = False
         self.bus = None
-        self.bitrates = {'250 kbps': 250000,
-                         '125 kbps': 125000,
-                         '100 kbps': 100000,
-                         '83.3 kbps': 83333,
-                         '50 kbps': 50000,
-                        }
+        self.bitrates = {
+            '250 kbps': 250000,
+            '125 kbps': 125000,
+            '100 kbps': 100000,
+            '83.3 kbps': 83333,
+            '50 kbps': 50000,
+        }
         self.default_bitrate_key = '100 kbps'
         self.bitrate = self.bitrates[self.default_bitrate_key]
         self.interfaces = {}
@@ -62,10 +54,12 @@ class Driver: # pylint: disable=too-many-instance-attributes
         self.device_bus = None
         self.address = None
 
-        # Initial scan: Use fast_scan_only=True to prevent startup hangs on probing
+        # Initial scan: fast_scan_only=True prevents startup hangs on probing sensitive ports.
         if self.find_interfaces():
-            self.find_interface_channels(self.interfaces[next(iter(self.interfaces))], fast_scan_only=True) # pylint: disable=line-too-long
-
+            self.find_interface_channels(
+                self.interfaces[next(iter(self.interfaces))],
+                fast_scan_only=True
+            )
 
     def initialize(self, vscp_callbacks: list) -> bool:
         """
@@ -75,7 +69,8 @@ class Driver: # pylint: disable=too-many-instance-attributes
         with the provided VSCP callbacks.
 
         Args:
-            vscp_callbacks (list): A list of callback functions to handle incoming messages.
+            vscp_callbacks (list): A list of callback functions (or VSCP objects)
+                                   to handle incoming messages.
 
         Returns:
             bool: True if initialization was successful, False otherwise.
@@ -86,7 +81,7 @@ class Driver: # pylint: disable=too-many-instance-attributes
                 kwargs = {}
                 if self.interface == 'slcan':
                     baudrate = 115200
-                    # Check if specific baudrate is detected (e.g. for Lawicel 57600)
+                    # Detect specific baudrate overrides (e.g. Lawicel 57600)
                     if self.channel in self.channels:
                         baudrate = self.channels[self.channel].get('baudrate', 115200)
                     kwargs['ttyBaudrate'] = baudrate
@@ -97,7 +92,7 @@ class Driver: # pylint: disable=too-many-instance-attributes
                     bitrate=self.bitrate,       state=BusState.ACTIVE,
                     auto_reset=True,            receive_own_messages=True,
                     **kwargs
-                    )
+                )
                 callback = vscp.Callback(vscp_callbacks)
                 self.notifier = can.Notifier(self.bus, [callback], timeout=3.0)
                 self.is_phy_initialized = True
@@ -121,30 +116,52 @@ class Driver: # pylint: disable=too-many-instance-attributes
         """
         Shuts down the CAN bus connection.
 
-        Stops the notifier and shuts down the bus interface safely.
+        Safely stops the notifier and the bus, ensuring resources are released.
+        Specific handling is included for GS_USB on Windows to allow reconnection.
         """
         if self.notifier is not None:
             self.notifier.stop()
+            self.notifier = None
+
         if self.bus is not None:
-            self.bus.shutdown()
+            try:
+                self.bus.shutdown()
+            except Exception: # pylint: disable=broad-exception-caught
+                pass
+            finally:
+                # Critical: remove reference to allow GC and prevent __del__ errors
+                self.bus = None
+
+        # Explicitly dispose USB resources for gs_usb to fix re-connection issues on Windows.
+        if self.interface == 'gs_usb' and self.device_bus and self.address:
+            try:
+                # Find device by bus/address to dispose resources
+                # since we don't hold the device object directly.
+                dev = usb.core.find(
+                    idVendor=0x1D50, idProduct=0x606F,
+                    custom_match=lambda d: d.bus == self.device_bus and d.address == self.address
+                )
+                if dev:
+                    usb.util.dispose_resources(dev)
+            except Exception: # pylint: disable=broad-exception-caught
+                pass
+
         self.is_phy_initialized = False
 
 
     def configure(self, bitrate: int = 0, interface: str = '', channel: str = '', bus: str = '', address: str = ''): # pylint: disable=too-many-arguments, too-many-positional-arguments, line-too-long
-        # pylint: disable=line-too-long
         """
         Configures the driver parameters.
 
-        Updates the configuration settings if provided values are not empty/zero.
+        Updates the configuration settings if provided values are not empty or zero.
 
         Args:
-            bitrate (int, optional): The CAN bus bitrate. Defaults to 0 (no change).
-            interface (str, optional): The interface name (e.g., 'pcan').
+            bitrate (int, optional): The CAN bus bitrate.
+            interface (str, optional): The interface name (e.g., 'pcan', 'slcan').
             channel (str, optional): The channel identifier.
-            bus (str, optional): The bus identifier.
+            bus (str, optional): The bus identifier (backend specific).
             address (str, optional): The device address.
         """
-        # pylint: enable=line-too-long
         if interface:
             self.interface = interface
         if 0 != bitrate:
@@ -152,7 +169,7 @@ class Driver: # pylint: disable=too-many-instance-attributes
         if channel:
             self.channel = channel
 
-        # bus and address checks handle default "no change" signal (empty string) from caller
+        # bus and address checks handle default "no change" signal (empty string)
         if '' != bus:
             self.device_bus = bus
         if '' != address:
@@ -163,43 +180,55 @@ class Driver: # pylint: disable=too-many-instance-attributes
         """
         Scans for available and supported CAN interfaces.
 
-        Supports detection of 'pcan', 'gs_usb' (Canable), and 'slcan' (Serial) interfaces.
-        Populates the `self.interfaces` dictionary. Priority is given to native CAN interfaces.
+        Supported interfaces:
+        - 'pcan' (Cross-platform)
+        - 'gs_usb' (Windows only)
+        - 'socketcan' (Linux only)
+        - 'slcan' (Serial port based)
 
         Returns:
             bool: True if at least one interface was found, False otherwise.
         """
         result = False
-        native_ifaces = ['pcan', 'gs_usb']
+        native_ifaces = ['pcan']
+
+        if platform.system() == 'Windows':
+            native_ifaces.append('gs_usb')
+        elif platform.system() == 'Linux':
+            native_ifaces.append('socketcan')
+
         self.interfaces.clear()
 
         # 1. Check Native Interfaces (High Priority)
         for iface in native_ifaces:
             match iface:
                 case 'gs_usb':
-                    if _backend is not None:
-                        canable = usb.core.find(backend=_backend, idVendor=0x1D50, idProduct=0x606F)
-                        if canable is not None:
-                            self.interfaces['canable'] = iface
+                    # Rely on PyUSB to find the backend (e.g. WinUSB via system libusb wrapper)
+                    canable = usb.core.find(idVendor=0x1D50, idProduct=0x606F)
+                    if canable is not None:
+                        self.interfaces['canable'] = iface
+                case 'socketcan':
+                    configs = can.detect_available_configs(interfaces=['socketcan'])
+                    if configs:
+                        self.interfaces['socketcan'] = iface
                 case _:
                     configs = can.detect_available_configs(interfaces=iface)
                     if 0 != len(configs):
                         self.interfaces[iface.upper()] = iface
 
         # 2. Check Serial Ports for SLCAN (Low Priority - added last)
-        # We assume if serial ports exist, slcan is possible.
         com_ports = serial.tools.list_ports.comports()
         if len(com_ports) > 0:
             self.interfaces['slcan'] = 'slcan'
 
         if 0 != len(self.interfaces):
-            # Sets default interface to the first one found (Native takes precedence due to insertion order) # pylint: disable=line-too-long
+            # Default to the first found interface (Native takes precedence)
             self.interface = next(iter(self.interfaces))
             result = True
         return result
 
 
-    def find_interface_channels(self, interface: str, fast_scan_only: bool = False): # pylint: disable=too-many-locals, too-many-branches
+    def find_interface_channels(self, interface: str, fast_scan_only: bool = False): # pylint: disable=too-many-locals, too-many-branches, too-many-statements
         """
         Finds available channels for a specific interface.
 
@@ -207,7 +236,7 @@ class Driver: # pylint: disable=too-many-instance-attributes
         the given interface type (e.g. device IDs or COM ports).
 
         Args:
-            interface (str): The name of the interface to scan (e.g., 'pcan', 'gs_usb', 'slcan').
+            interface (str): The name of the interface to scan.
             fast_scan_only (bool): If True, skips slow probing methods (e.g. opening COM ports).
 
         Returns:
@@ -229,32 +258,45 @@ class Driver: # pylint: disable=too-many-instance-attributes
                             channel_data = {'channel': config['channel'], 'bus': None, 'address': None} # pylint: disable=line-too-long
                             self.channels[channel_key] = channel_data
             case 'gs_usb':
-                if _backend is not None:
-                    configs = usb.core.find(backend=_backend, idVendor=0x1D50, idProduct=0x606F, find_all=True) # pylint: disable=line-too-long
-                    if configs is not None:
-                        for config in configs:
-                            if isinstance(config, usb.core.Device):
-                                channel_key = f'CHAN_{config.address}'
-                                channel_data = {'channel': config.product, 'bus': config.bus, 'address': config.address} # pylint: disable=line-too-long
-                                self.channels[channel_key] = channel_data
+                # Rely on PyUSB defaults to support WinUSB properly without forcing specific DLLs
+                configs = usb.core.find(idVendor=0x1D50, idProduct=0x606F, find_all=True)
+                if configs is not None:
+                    for config in configs:
+                        if isinstance(config, usb.core.Device):
+                            channel_key = f'CHAN_{config.address}'
+
+                            # Safely attempt to read product string, fallback on error
+                            try:
+                                product_name = config.product
+                            except Exception: # pylint: disable=broad-exception-caught
+                                product_name = f"GS_USB Device {config.address}"
+
+                            # Pass product name as channel to satisfy type hints (str).
+                            # Actual device identification relies on 'bus' and 'address' params.
+                            channel_data = {'channel': product_name, 'bus': config.bus, 'address': config.address} # pylint: disable=line-too-long
+                            self.channels[channel_key] = channel_data
+            case 'socketcan':
+                configs = can.detect_available_configs(interfaces=['socketcan'])
+                for config in configs:
+                    channel_name = config.get('channel')
+                    if channel_name:
+                        self.channels[channel_name] = {'channel': channel_name, 'bus': None, 'address': None} # pylint: disable=line-too-long
             case 'slcan':
                 known_vids = ["1D50", "0483", "0403"] # VIDs: OpenMoko, STMicro, FTDI
                 ports = serial.tools.list_ports.comports()
 
                 for port in ports:
-                    # SAFETY: Skip Bluetooth ports as opening them can hang for a long time if device is offline # pylint: disable=line-too-long
+                    # SAFETY: Skip Bluetooth ports as opening them can hang if device is offline
                     if 'bluetooth' in (port.description or '').lower():
                         continue
 
                     is_slcan = False
-                    baudrate = 115200 # Default slcan baudrate
+                    baudrate = 115200
 
                     # 1. Fast check: VID match
-                    # port.hwid e.g. "USB VID:PID=..."
                     hwid = port.hwid if port.hwid else ""
 
                     if "0403" in hwid:
-                        # Lawicel (VID 0403) typically uses 57600
                         baudrate = 57600
 
                     if any(vid in hwid for vid in known_vids):
@@ -263,8 +305,8 @@ class Driver: # pylint: disable=too-many-instance-attributes
                     # 2. Slow check: Probe port (Skipped if fast_scan_only is True)
                     if not is_slcan and not fast_scan_only:
                         try:
-                            # Attempt to connect and check for 'v'ersion response
-                            # write_timeout and timeout ensure we don't block
+                            # Attempt to connect and check for 'v'ersion response.
+                            # Timeout args ensure we don't block indefinitely.
                             with serial.Serial(port.device, 115200, timeout=0.1, write_timeout=0.1) as ser: # pylint: disable=line-too-long
                                 ser.write(b'v\r')
                                 res = ser.read(10)
