@@ -30,6 +30,8 @@ class Driver: # pylint: disable=too-many-instance-attributes
     bitrates, detects available interfaces, and sets up message notifications.
     """
 
+    # VIDs for common SLCAN adapters: OpenMoko (Canable), STMicro, FTDI, cantact, USBtin
+    SLCAN_VIDS = ["1D50", "0483", "0403", "AD50", "04D8"]
 
     def __init__(self):
         """
@@ -217,8 +219,20 @@ class Driver: # pylint: disable=too-many-instance-attributes
                         self.interfaces[iface.upper()] = iface
 
         # 2. Check Serial Ports for SLCAN (Low Priority - added last)
+        # Only add slcan if we find a port with a matching VID to prevent
+        # generic COM ports from cluttering the interface list.
         com_ports = serial.tools.list_ports.comports()
-        if len(com_ports) > 0:
+        slcan_candidate_found = False
+        for port in com_ports:
+            if 'bluetooth' in (port.description or '').lower():
+                continue
+
+            hwid = port.hwid if port.hwid else ""
+            if any(vid in hwid for vid in self.SLCAN_VIDS):
+                slcan_candidate_found = True
+                break
+
+        if slcan_candidate_found:
             self.interfaces['slcan'] = 'slcan'
 
         if 0 != len(self.interfaces):
@@ -282,7 +296,6 @@ class Driver: # pylint: disable=too-many-instance-attributes
                     if channel_name:
                         self.channels[channel_name] = {'channel': channel_name, 'bus': None, 'address': None} # pylint: disable=line-too-long
             case 'slcan':
-                known_vids = ["1D50", "0483", "0403"] # VIDs: OpenMoko, STMicro, FTDI
                 ports = serial.tools.list_ports.comports()
 
                 for port in ports:
@@ -299,7 +312,7 @@ class Driver: # pylint: disable=too-many-instance-attributes
                     if "0403" in hwid:
                         baudrate = 57600
 
-                    if any(vid in hwid for vid in known_vids):
+                    if any(vid in hwid for vid in self.SLCAN_VIDS):
                         is_slcan = True
 
                     # 2. Slow check: Probe port (Skipped if fast_scan_only is True)
