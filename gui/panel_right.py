@@ -14,11 +14,13 @@ import os
 import csv
 from typing import Any, cast
 import customtkinter as ctk
+import tk_async_execute as tae
 from CTkMessagebox import CTkMessagebox
 import vscp
 from vscp import dictionary
 from .treeview import CTkTreeview
-from .common import add_event_info_handle, event_info_handle, add_filter_blocking_observer
+from .common import add_event_info_handle, event_info_handle, neighbours_handle,    \
+                    add_filter_blocking_observer, is_auto_discovery_enabled
 from .popup import CTkFloatingWindow
 from .message_filters import MessageFilters
 
@@ -41,6 +43,9 @@ class Messages(ctk.CTkFrame): # pylint: disable=too-many-ancestors
             parent: The parent widget associated with this frame.
         """
         super().__init__(parent)
+
+        # Set to track nodes that are currently being discovered to prevent redundant async calls
+        self._discovery_pending = set()
 
         # Header structure: (id, text, width, minwidth, anchor, cell_anchor)
         header = [('', '', 0, 0, 'center', 'w'),
@@ -95,8 +100,119 @@ class Messages(ctk.CTkFrame): # pylint: disable=too-many-ancestors
 
         Args:
             row_data: A list of values representing the message data to display.
+                      Each item in row_data is a dict with 'values' key containing:
+                      [timestamp, dir, id, priority, class, type, data]
         """
         self.messages.insert_items(row_data)
+
+        # Auto-discovery logic
+        if is_auto_discovery_enabled(): # pylint: disable=too-many-nested-blocks
+            for item in row_data:
+                try:
+                    values = item.get('values', [])
+                    if len(values) >= 7:
+                        # Extract message details based on column index
+                        # 2: Node ID, 4: Class Name, 5: Type Name
+                        node_id_str = values[2]
+                        class_name = str(values[4]).upper()
+                        type_name = str(values[5]).upper()
+
+                        # Check triggers:
+                        # 1. NEW_NODE_ONLINE (Type 6)
+                        # 2. NODE_HEARTBEAT (Type 9)
+                        # 3. WHO_IS_THERE_RESPONSE (Type 31) - Indicates node is responding to probes # pylint: disable=line-too-long
+                        is_new_node = ('PROTOCOL' in class_name and 'NEW_NODE_ONLINE' in type_name)
+                        is_heartbeat = ('INFORMATION' in class_name and 'NODE_HEARTBEAT' in type_name) # pylint: disable=line-too-long
+                        is_probe_response = ('PROTOCOL' in class_name and 'WHO_IS_THERE_RESPONSE' in type_name) # pylint: disable=line-too-long
+
+                        if is_new_node or is_heartbeat or is_probe_response:
+                            try:
+                                node_id = int(node_id_str, 16)
+
+                                # Check conditions to trigger discovery:
+                                # Only if Node is NOT in the list
+                                if not vscp.is_node_on_list(node_id) and node_id not in self._discovery_pending: # pylint: disable=line-too-long
+                                    self._discovery_pending.add(node_id)
+                                    # SCHEDULE DISCOVERY WITH DELAY
+                                    # Instead of running immediately, we wait 200ms.
+                                    # This allows the message feeder to flush current messages (like pending responses) # pylint: disable=line-too-long
+                                    # to the GUI before get_node_info takes exclusive control of the bus. # pylint: disable=line-too-long
+                                    self.after(200, self._start_async_discovery, node_id)
+                            except ValueError:
+                                pass # Invalid Node ID format
+                except (IndexError, AttributeError):
+                    pass
+
+
+    def _start_async_discovery(self, node_id):
+        """
+        Helper to start the async discovery task.
+        Called by self.after() to break the synchronous execution chain.
+        """
+        tae.async_execute(self._auto_discover_node(node_id), visible=False)
+
+
+    async def _auto_discover_node(self, node_id: int):
+        """
+        Asynchronously fetches info for a new node and updates the list.
+        Only adds the node if valid GUID and MDF are retrieved.
+
+        Args:
+            node_id (int): The ID of the node to discover.
+        """
+        try:
+            # Attempt to fetch full node info
+            try:
+                info = await vscp.get_node_info(node_id)
+            except Exception: # pylint: disable=broad-exception-caught
+                info = None
+
+            # Verify that info was retrieved AND contains required fields.
+            if info is not None and 'guid' in info and 'mdf' in info:
+                # Sanitize structure fields
+                if 'id' not in info:
+                    info['id'] = node_id
+                if 'isHardCoded' not in info:
+                    info['isHardCoded'] = False
+
+                # Format GUID as hex string if necessary
+                if isinstance(info['guid'], list):
+                    guid_str = ":".join(f"{x:02X}" for x in info['guid'])
+                    info['guid'] = {'str': guid_str, 'raw': info['guid']}
+
+                # Ensure GUID format is strictly correct
+                if not isinstance(info['guid'], dict) or 'str' not in info['guid']:
+                    return
+
+                # Update the node list
+                if not vscp.is_node_on_list(node_id):
+                    # Use the specific function to add the node to the internal list in tools.py
+                    vscp.append_node(info)
+
+                    # Sort the list to ensure order
+                    nodes_list = vscp.get_nodes()
+                    if isinstance(nodes_list, list):
+                        nodes_list.sort(key=lambda x: x['id'])
+
+                    # Trigger GUI update on main thread
+                    self.after(0, self._trigger_neighbours_reload)
+            else:
+                # Incomplete data or failure; do not add to list.
+                # Node will be retried on next heartbeat.
+                pass
+
+        except Exception as e: # pylint: disable=broad-exception-caught
+            print(f"Auto-discovery error: {e}")
+        finally:
+            if node_id in self._discovery_pending:
+                self._discovery_pending.remove(node_id)
+
+
+    def _trigger_neighbours_reload(self):
+        """Helper to call reload_data on the main GUI thread."""
+        handle = neighbours_handle()
+        if hasattr(handle, 'reload_data'):
+            cast(Any, handle).reload_data()
 
 
     def update_node_id(self, old_id, new_id):
@@ -238,7 +354,7 @@ class EventInfo(ctk.CTkFrame): # pylint: disable=too-few-public-methods, too-man
         self.event_info_box.configure(state='disabled')
 
 
-class RightPanel(ctk.CTkFrame): # pylint: disable=too-few-public-methods, too-many-ancestors
+class RightPanel(ctk.CTkFrame): # pylint: disable=too-few-public-methods, too-many-ancestors, too-many-instance-attributes
     """
     Main container for the right panel of the application.
 
@@ -326,4 +442,5 @@ class RightPanel(ctk.CTkFrame): # pylint: disable=too-few-public-methods, too-ma
                 # Restore geometry
                 # IMPORTANT: Use 'before' to ensure it's placed above the bottom container,
                 # otherwise it will be appended to the bottom of the parent frame.
-                self.messages.widget.pack(padx=(0, 4), pady=4, fill='both', expand=True, before=self.bottom_container) # pylint: disable=line-too-long
+                self.messages.widget.pack(padx=(0, 4), pady=4, fill='both',
+                                          expand=True, before=self.bottom_container)

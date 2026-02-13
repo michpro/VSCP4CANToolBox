@@ -21,6 +21,7 @@ _event_info_handle: object = None
 _nodes: dict = {}
 _progress_observers: list = []
 _filter_blocking_observers = []
+_auto_discovery_enabled: bool = False
 
 
 def add_progress_observer(observer) -> None:
@@ -139,9 +140,6 @@ def get_node_info(key) -> Any:
 def get_nodes() -> dict:
     """
     Retrieves the entire dictionary of cached node information.
-
-    Returns:
-        dict: The dictionary containing all node info.
     """
     return _nodes
 
@@ -149,6 +147,9 @@ def get_nodes() -> dict:
 def add_filter_blocking_observer(callback):
     """
     Register a callback to be notified when filters should be blocked/unblocked.
+
+    Args:
+        callback (callable): Function to call with boolean block state.
     """
     _filter_blocking_observers.append(callback)
 
@@ -156,8 +157,24 @@ def add_filter_blocking_observer(callback):
 def call_set_filter_blocking(block: bool):
     """
     Notify all observers to set filter blocking state.
+
     Args:
         block: True to block all, False to apply filters.
     """
     for callback in _filter_blocking_observers:
         callback(block)
+
+
+def set_auto_discovery(enabled: bool) -> None:
+    """
+    Sets the state of the auto-discovery feature.
+    """
+    global _auto_discovery_enabled # pylint: disable=global-statement
+    _auto_discovery_enabled = enabled
+
+
+def is_auto_discovery_enabled() -> bool:
+    """
+    Checks if auto-discovery is enabled.
+    """
+    return _auto_discovery_enabled

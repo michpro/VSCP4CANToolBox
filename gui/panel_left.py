@@ -9,7 +9,7 @@ firmware upload and configuration.
 @copyright SPDX-FileCopyrightText: Copyright 2024-2026 by Michal Protasowicki
 @license SPDX-License-Identifier: MIT
 """
-# pylint: disable=too-many-ancestors, line-too-long
+
 
 import os
 import re
@@ -22,16 +22,76 @@ from CTkMessagebox import CTkMessagebox
 from intelhex import IntelHex
 import vscp
 from .treeview import CTkTreeview
-from .common import add_set_state_callback, call_set_scan_widget_state,     \
-                    add_neighbours_handle, neighbours_handle,               \
-                    call_set_filter_blocking
+from .common import add_set_state_callback, add_neighbours_handle,  \
+                    neighbours_handle, call_set_filter_blocking,    \
+                    set_auto_discovery
 from .popup import CTkFloatingWindow
 from .node_config import NodeConfiguration
 from .change_node_id import ChangeNodeId
 from .device_provisioner import DeviceProvisioner
 
 
-class LeftPanel(ctk.CTkFrame):
+class AlignedReverseCheckBox(ctk.CTkFrame): # pylint: disable=too-many-ancestors
+    """
+    Custom Checkbox widget with label on the left and checkbox on the right.
+    """
+
+    def __init__(self, master, text="Option", label_width=100, command=None, **kwargs):
+        """
+        Initialize the AlignedReverseCheckBox.
+
+        Args:
+            master: Parent widget.
+            text: Label text.
+            label_width: Fixed width for the label to ensure alignment.
+            command: Callback function when toggled.
+            **kwargs: Additional arguments for CTkFrame.
+        """
+        super().__init__(master, fg_color="transparent", **kwargs)
+
+        self.label = ctk.CTkLabel(self, text=text, width=label_width, anchor="e", cursor="hand2")
+        self.label.grid(row=0, column=0, sticky="e")
+
+        self.checkbox = ctk.CTkCheckBox(self, text="", width=24, command=command)
+        self.checkbox.grid(row=0, column=1, sticky="w", padx=(5, 0))
+
+        self.label.bind("<Button-1>", lambda e: self.checkbox.toggle())
+
+
+    # Helper methods
+    def get(self):
+        """Return the current value of the checkbox."""
+        return self.checkbox.get()
+
+
+    def toggle(self):
+        """Toggle the checkbox state."""
+        self.checkbox.toggle()
+
+
+    def select(self):
+        """Select the checkbox."""
+        self.checkbox.select()
+
+
+    def deselect(self):
+        """Deselect the checkbox."""
+        self.checkbox.deselect()
+
+
+    def configure(self, require_redraw=False, **kwargs):
+        """
+        Pass configuration to children.
+        Specifically handles 'state' to enable/disable interaction for both label and checkbox.
+        """
+        if 'state' in kwargs:
+            state = kwargs.pop('state')
+            self.checkbox.configure(state=state)
+            self.label.configure(state=state)
+        super().configure(require_redraw=require_redraw, **kwargs)
+
+
+class LeftPanel(ctk.CTkFrame): # pylint: disable=too-many-ancestors
     """
     Main container for the left panel of the application.
 
@@ -57,10 +117,6 @@ class LeftPanel(ctk.CTkFrame):
         self.button = ctk.CTkButton(self.widget, text='Send Host DateTime',
                                     width=100, height=28, command=self.button_cb)
         self.button.pack(padx=5, pady=(5, 10), fill='x')
-        # TODO remove
-        # self.button1 = ctk.CTkButton(self.widget, text='test', width=100, height=28,
-        #                             command=self.button1_cb)
-        # self.button1.pack(padx=5, pady=(0, 10), fill='x')
 
 
     def button_cb(self):
@@ -68,7 +124,7 @@ class LeftPanel(ctk.CTkFrame):
         tae.async_execute(vscp.send_host_datetime(), visible=False)
 
 
-class Neighbourhood(ctk.CTkFrame):
+class Neighbourhood(ctk.CTkFrame): # pylint: disable=too-many-ancestors
     """
     Container for the VSCP scanning tools and the node list.
 
@@ -97,7 +153,7 @@ class Neighbourhood(ctk.CTkFrame):
         add_neighbours_handle(self.neighbours)
 
 
-class ScanWidget(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
+class ScanWidget(ctk.CTkFrame): # pylint: disable=too-many-ancestors, too-many-instance-attributes
     """
     Widget containing controls for scanning VSCP nodes.
 
@@ -113,8 +169,9 @@ class ScanWidget(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
         """
         self.parent = parent
         super().__init__(self.parent)
-        # TODO remove
-        # self.add_node_in_progress = False
+
+        # Track external state (connection status)
+        self._external_state = 'disabled'
 
         self.widget = ctk.CTkFrame(self.parent)
         self.widget.pack(padx=5, pady=(20, 0), anchor='nw', fill='x', expand=False)
@@ -147,14 +204,86 @@ class ScanWidget(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
         self.button_scan = ctk.CTkButton(self.widget, width=50, text='Scan',
                                          command=self._button_scan_callback)
         self.button_scan.grid(row=0, column=4, sticky='w', pady=5, padx=(10, 0))
-        # TODO remove
-        # self.toggle_var = ctk.StringVar(value='on')
-        # self.toggle = ctk.CTkSwitch(self.widget, variable=self.toggle_var,
-        #                             onvalue='on', offvalue='off', text='Smart add',
-        #                             command=self.toggle_cb)
-        # self.toggle.grid(row=0, column=5, sticky='e', pady=5, padx=(75, 5))
+
+        # Push column 6 (Auto-discovery) to the far right edge of the frame
+        self.widget.grid_columnconfigure(5, weight=1)
+
+        self.auto_disc_var = ctk.StringVar(value="on")
+        self.chk_auto_disc = AlignedReverseCheckBox(self.widget, text="Auto-discovery",
+                                                    label_width=100,
+                                                    command=self._toggle_auto_discovery)
+        self.chk_auto_disc.grid(row=0, column=6, sticky='e', pady=5, padx=(10, 5))
+
+        # Set initial visual state and global flag
+        self.chk_auto_disc.select()
+        set_auto_discovery(True)
+
+        # Restore the callback mechanism to handle state changes from common.py
         add_set_state_callback(self.set_scan_widget_state)
-        call_set_scan_widget_state('disabled')
+
+        # Apply initial UI state
+        self._update_ui_state()
+
+
+    def _toggle_auto_discovery(self):
+        """
+        Callback for Auto-discovery checkbox.
+        Updates the shared state in common module and refreshes UI.
+        """
+        is_enabled = self.chk_auto_disc.get() == 1
+        set_auto_discovery(is_enabled)
+        self._update_ui_state()
+
+
+    def _update_ui_state(self):
+        # pylint: disable=line-too-long
+        """
+        Logic to determine the state of controls based on:
+        1. External connection/bus state (self._external_state)
+        2. Auto-discovery checkbox state
+
+        Rules:
+        - If external state is 'disabled' (no connection/busy), controls are disabled.
+        - If Auto-discovery is CHECKED, controls (Scan/Inputs) are disabled.
+        - Checkbox itself generally remains enabled unless external state dictates complete lockout (e.g. busy scan).
+        """
+        # pylint: enable=line-too-long
+        is_auto_disc = self.chk_auto_disc.get() == 1
+
+        state_controls = 'normal'
+        state_checkbox = 'normal'
+
+        # Rule 1: Dependency on CAN adapter connection (or busy state passed from common)
+        if self._external_state == 'disabled':
+            state_controls = 'disabled'
+
+        # Rule 2: If checkbox is selected -> controls disabled regardless of other conditions
+        if is_auto_disc:
+            state_controls = 'disabled'
+
+        # Apply states
+        self.l_min_id.configure(state=state_controls)
+        self.min_id.configure(state=state_controls)
+        self.l_max_id.configure(state=state_controls)
+        self.max_id.configure(state=state_controls)
+        self.button_scan.configure(state=state_controls)
+
+        # Checkbox state logic
+        self.chk_auto_disc.configure(state=state_checkbox)
+
+
+    def set_scan_widget_state(self, state):
+        # pylint: disable=line-too-long
+        """
+        Callback triggered by common.py to set the general widget state.
+        Usually indicates if the CAN adapter is connected ('normal') or disconnected/busy ('disabled').
+
+        Args:
+            state: The state to set ('normal' or 'disabled').
+        """
+        # pylint: enable=line-too-long
+        self._external_state = state
+        self._update_ui_state()
 
 
     def _min_id_format(self, _):
@@ -175,12 +304,7 @@ class ScanWidget(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
     def _validate_start(self, input_str):
         """
         Validate the Start ID input.
-        
-        Args:
-            input_str: The current string in the entry widget.
-            
-        Returns:
-            bool: True if input is valid, False otherwise.
+        Returns True if input is valid, False otherwise.
         """
         if not input_str.lower().startswith('0x'):
             return False
@@ -233,12 +357,7 @@ class ScanWidget(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
     def _validate_stop(self, input_str):
         """
         Validate the Stop ID input.
-
-        Args:
-            input_str: The current string in the entry widget.
-
-        Returns:
-            bool: True if input is valid, False otherwise.
+        Returns True if input is valid, False otherwise.
         """
         if not input_str.lower().startswith('0x'):
             return False
@@ -298,7 +417,7 @@ class ScanWidget(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
                 max_val = int(max_str, 16)
 
                 if min_val > max_val:
-                    error_msg = f"Start ID (0x{min_val:02X}) cannot be greater than Stop ID (0x{max_val:02X})."
+                    error_msg = f"Start ID (0x{min_val:02X}) cannot be greater than Stop ID (0x{max_val:02X})." # pylint: disable=line-too-long
                 elif not 0 <= min_val <= 254:
                     error_msg = "Start ID must be between 0x00 and 0xFE."
                 elif not 0 <= max_val <= 254:
@@ -333,23 +452,8 @@ class ScanWidget(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
                 cast(Any, handle).reload_data()
 
 
-    def set_scan_widget_state(self, state):
-        """
-        Enable or disable the scan widget controls.
-
-        Args:
-            state: The state to set ('normal' or 'disabled').
-        """
-        self.l_min_id.configure(state=state)
-        self.min_id.configure(state=state)
-        self.l_max_id.configure(state=state)
-        self.max_id.configure(state=state)
-        self.button_scan.configure(state=state)
-        # TODO remove
-        # self.toggle.configure(state=state)
-
-
-class Neighbours(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
+class Neighbours(ctk.CTkFrame): # pylint: disable=too-many-ancestors, too-many-instance-attributes
+    # pylint: disable=line-too-long
     """
     Widget displaying a treeview of discovered VSCP nodes.
 
@@ -418,9 +522,6 @@ class Neighbours(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
     def reload_data(self):
         """
         Reload and display the list of nodes from VSCP storage.
-        
-        Clears the current view, fetches nodes from the vscp module,
-        formats them, and inserts them back into the treeview.
         """
         self.delete_all_items()
         data = []
@@ -429,7 +530,7 @@ class Neighbours(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
             if node['isHardCoded'] is True:
                 node_id = '►' + node_id + '◄'
             entry = {'text': node_id,
-                     'child': [{'text': 'GUID:', 'values': [node['guid']['str']]}, 
+                     'child': [{'text': 'GUID:', 'values': [node['guid']['str']]},
                                {'text': 'MDF:',  'values': ['http://' + node['mdf']]}
                               ]
                     }
@@ -456,10 +557,6 @@ class Neighbours(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
     def _show_menu(self, event, menu):
         """
         Display the context menu on right-click.
-
-        Args:
-            event: The mouse event triggering the menu.
-            menu: The menu widget to display.
         """
         self.selected_row_id = self.neighbours.treeview.identify('row', event.x, event.y)
         try:
@@ -472,9 +569,6 @@ class Neighbours(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
     def _set_menu_items_state(self, state):
         """
         Set the enabled/disabled state of the context menu items.
-
-        Args:
-            state: The state to set ('normal' or 'disabled').
         """
         self.dropdown_bt_firmware.configure(state=state)
         self.dropdown_bt_configure.configure(state=state)
@@ -490,7 +584,7 @@ class Neighbours(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
         """
         parent_id = self.neighbours.treeview.parent(self.selected_row_id)
         text = self.neighbours.treeview.item(parent_id)['text'] if parent_id else   \
-            self.neighbours.treeview.item(self.selected_row_id)['text']
+               self.neighbours.treeview.item(self.selected_row_id)['text']
         try:
             result = int(text, 0)
         except ValueError:
@@ -501,9 +595,6 @@ class Neighbours(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
     def _get_mdf_link(self) -> str:
         """
         Retrieve the MDF link associated with the selected node.
-
-        Returns:
-            str: The URL of the MDF file.
         """
         result = ''
         parent_id = self.neighbours.treeview.parent(self.selected_row_id)
@@ -522,9 +613,6 @@ class Neighbours(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
     def _get_guid(self) -> str:
         """
         Retrieve the GUID of the selected node.
-
-        Returns:
-            str: The Globally Unique Identifier of the node.
         """
         result = ''
         parent_id = self.neighbours.treeview.parent(self.selected_row_id)
@@ -543,12 +631,6 @@ class Neighbours(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
     def _confirm_firmware_upload(self, node_id: int) -> bool:
         """
         Ask user for confirmation before uploading firmware.
-
-        Args:
-            node_id: The ID of the node to receive firmware.
-
-        Returns:
-            bool: True if confirmed, False otherwise.
         """
         title = 'Uploading new firmware'
         message = f'Are you sure you want to upload new firmware to node 0x{node_id:02X}?'
@@ -606,9 +688,6 @@ class Neighbours(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
     def _get_local_mdf(self):
         """
         Open a file dialog to select and read a local MDF file.
-
-        Returns:
-            bytes: The content of the selected MDF file as bytes, or an empty string on failure.
         """
         result = ''
         node_id = self._get_node_id()
@@ -637,6 +716,7 @@ class Neighbours(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
         node_id = self._get_node_id()
         guid = self._get_guid()
         mdf_link = self._get_mdf_link()
+        # Handle local proxy/tunneling if applicable
         if 'vscp.local' in mdf_link.lower():
             mdf_link = re.sub(re.escape('vscp.local'), 'localhost', mdf_link, flags=re.IGNORECASE)
         mdf = ''
