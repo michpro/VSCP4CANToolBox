@@ -498,7 +498,7 @@ class Neighbours(ctk.CTkFrame): # pylint: disable=too-many-ancestors, too-many-i
         self.dropdown_bt_firmware.pack(expand=True, fill="x", padx=0, pady=0)
         # TODO remove
         # data = []
-        # for idx in range(1, 5):
+        # for idx in range(5, 15):
         #     node_id = f"0x{idx:02X}"
         #     entry = {'text': node_id,
         #                 'child': [{'text': 'GUID:', 'values': f'FA:FA:FA:{idx:02d}'},
@@ -506,6 +506,13 @@ class Neighbours(ctk.CTkFrame): # pylint: disable=too-many-ancestors, too-many-i
         #                          ]
         #             }
         #     data.append(entry)
+        #     entry = {'id': idx,
+        #              'isHardCoded': False,
+        #              'guid': {'val': [0xFA, 0xFA, 0xFA, idx], 'str': f'FA:FA:FA:{idx:02X}'},
+        #              'mdf': f'http://vscp.local/mdf/xxx{idx}.mdf'
+        #             }
+        #     vscp.append_node(entry)
+        #     # print(entry)
         # self.insert(data)
 
 
@@ -522,21 +529,35 @@ class Neighbours(ctk.CTkFrame): # pylint: disable=too-many-ancestors, too-many-i
     def reload_data(self):
         """
         Reload and display the list of nodes from VSCP storage.
+        Preserves the expanded/collapsed state of existing nodes.
         """
+        expanded_nodes = set()
+        for child_id in self.neighbours.treeview.get_children():
+            # If the item is open (expanded), save its text (Node ID)
+            if self.neighbours.treeview.item(child_id, 'open'):
+                item_text = self.neighbours.treeview.item(child_id, 'text')
+                expanded_nodes.add(item_text)
+
         self.delete_all_items()
+
         data = []
         for node in vscp.get_nodes():
             node_id = f"0x{node['id']:02X}"
-            if node['isHardCoded'] is True:
+            if node.get('isHardCoded', False) is True:
                 node_id = '►' + node_id + '◄'
+
+            is_open = node_id in expanded_nodes
+
             entry = {'text': node_id,
+                     'open': is_open,
                      'child': [{'text': 'GUID:', 'values': [node['guid']['str']]},
                                {'text': 'MDF:',  'values': ['http://' + node['mdf']]}
                               ]
                     }
             data.append(entry)
-        if 0 != len(data):
-            self.insert(data)
+
+        if len(data) > 0:
+            self.neighbours.insert_items(data, auto_scroll=False)
 
 
     def _item_deselect(self, event):
