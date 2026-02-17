@@ -19,7 +19,6 @@ import asyncio
 from crc import Calculator, Crc16
 from gui.common import update_progress # pylint: disable=no-name-in-module
 from .message import Message
-from .utils import search
 
 
 MAX_CAN_DLC = 8
@@ -38,7 +37,7 @@ FIRMWARE_FLASH_ERASED_VALUE = 0xFF
 
 
 _message = Message()
-_nodes: list = []
+_nodes: dict = {}
 _async_work: bool = False
 _this_nickname: int = THIS_NODE_NICKNAME
 _node_id_observers: list = []
@@ -62,10 +61,7 @@ def set_async_work(async_work: bool) -> None:
 
 def is_async_work() -> bool:
     """
-    Checks if an asynchronous operation (scan, update, etc.) is currently in progress.
-
-    Returns:
-        bool: True if busy, False otherwise.
+    Checks if an asynchronous operation is currently in progress.
     """
     return _async_work
 
@@ -137,49 +133,44 @@ def is_node_on_list(nickname: int) -> bool:
     Returns:
         bool: True if found, False otherwise.
     """
-    return not search(nickname, 'id', 'id', _nodes) is None
+    return nickname in _nodes
 
 
 def append_node(node: dict) -> None:
     """
-    Adds a node dictionary to the internal node list.
-
-    Args:
-        node (dict): The node information.
+    Adds or updates a node in the internal storage.
     """
-    _nodes.append(node)
+    if 'id' in node:
+        _nodes[node['id']] = node
 
 
 def update_node_id(old_id: int, new_id: int) -> None:
     """
-    Updates the ID of an existing node in the internal list and sorts the list.
+    Updates the ID of an existing node.
     Notifies registered observers about the change.
 
     Args:
         old_id (int): The current node ID.
         new_id (int): The new node ID.
     """
-    for node in _nodes:
-        if node['id'] == old_id:
-            node['id'] = new_id
-            break
-    _nodes.sort(key=lambda x: x['id'])
-    _notify_node_id_observers(old_id, new_id)
+    if old_id in _nodes:
+        node_data = _nodes.pop(old_id)
+        node_data['id'] = new_id
+        _nodes[new_id] = node_data
+        _notify_node_id_observers(old_id, new_id)
 
 
 def get_nodes() -> list:
     """
     Retrieves the list of discovered nodes.
-
-    Returns:
-        list: A list of node dictionaries.
+    Returns a sorted list to maintain compatibility with UI iteration.
     """
-    return _nodes
+    return sorted(list(_nodes.values()), key=lambda x: x['id'])
 
 
 def clear_nodes() -> None:
     """
-    Clears the internal list of discovered nodes.
+    Clears the internal storage of discovered nodes.
     """
     _nodes.clear()
 
@@ -325,8 +316,7 @@ async def get_node_info(nickname: int) -> dict: # pylint: disable=too-many-branc
 async def scan(min_node_id: int = 0, max_node_id: int = MAX_NICKNAME_ID) -> int:
     """
     Scans the bus for active nodes within a specified range.
-
-    Populates the internal node list with discovered devices.
+    Updates the internal dictionary store.
 
     Args:
         min_node_id (int, optional): Start of range (inclusive). Defaults to 0.
@@ -348,20 +338,26 @@ async def scan(min_node_id: int = 0, max_node_id: int = MAX_NICKNAME_ID) -> int:
             max_node_id = min_node_id + 1
         max_node_id = min(max_node_id, MAX_NICKNAME_ID)
         step = 0.5 / (max_node_id - min_node_id + 1)
+
         for idx in range(min_node_id, max_node_id + 1):
             if idx is not _this_nickname:
                 nickname = await probe_node(idx)
-                if nickname is not None and is_node_on_list(nickname) is False:
-                    _nodes.append({'id': nickname})
+                if nickname is not None and nickname not in _nodes:
+                    _nodes[nickname] = {'id': nickname}
             progress = progress + step
             update_progress(progress)
+
         result = len(_nodes)
         if result > 0:
             step = 0.5 / result
-            for idx, node in enumerate(_nodes):
-                _nodes[idx] = await get_node_info(node['id'])
+            current_ids = list(_nodes.keys())
+            for node_id in current_ids:
+                info = await get_node_info(node_id)
+                if info:
+                    _nodes[node_id] = info
                 progress = progress + step
                 update_progress(progress)
+
         _message.disable_feeder(True)
         _async_work = False
     update_progress(1.0)
@@ -527,10 +523,8 @@ async def _collect_extended_page_responses(nickname: int, page: int, expected_co
     temp_result = {}
     all_data_received = False
 
-    # Progress step for one iteration of the wait loop
     step = 0
     if update_progress_callback:
-        # Assume this function takes a certain slice of time, e.g., PROBE_RETRIES_LONG iterations
         step = 1.0 / PROBE_RETRIES_LONG
 
     for _ in range(PROBE_RETRIES_LONG):
@@ -629,7 +623,6 @@ async def extended_page_write_register(nickname: int, page: int, register_id: in
             def sub_progress_updater(step_val):
                 nonlocal progress
                 if not has_parent:
-                    # step_val is a small value from the retry loop, scale it to the chunk size
                     scaled_step = step_val * chunk_progress_step
                     progress += scaled_step
                     update_progress(min(progress, 1.0))
@@ -648,10 +641,8 @@ async def extended_page_write_register(nickname: int, page: int, register_id: in
                 result = None
                 break
 
-            # Update register ID for the next loop (wrap around 255)
             current_reg_id = (current_reg_id + len(chunk)) & 0xFF
 
-            # Align progress after chunk completion
             if not has_parent:
                 progress = (i + 1) * chunk_progress_step
                 update_progress(progress)
@@ -713,15 +704,13 @@ async def extended_page_read_register(nickname: int, page: int, register_id: int
 
             # Calculate the number of expected packets (4 bytes per packet)
             max_response_messages = int(((count - 1) / 4) + 1)
-            vscp_msg['data'] += [number_of_regs] # Sending 0 in the command means 256
+            vscp_msg['data'] += [number_of_regs]
 
         _message.send(vscp_msg)
 
         def sub_progress_updater(step_val):
             nonlocal progress
             if not has_parent:
-                # Scale step to fit the progress bar logic
-                # In the original code, progress was incremented by step in each loop
                 progress += step_val
                 update_progress(min(progress, 1.0))
 

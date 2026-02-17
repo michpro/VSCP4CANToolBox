@@ -2,9 +2,9 @@
 GUI Common Utilities Module.
 
 This module provides common utility functions and shared state management
-for the GUI application. It handles callback registration for scan widget updates,
-stores references to main UI handles (neighbours, event info), and maintains
-a local dictionary of node information.
+for the GUI application. It handles callback registration for scan widget updates
+and references to main UI handles.
+
 
 @file common.py
 @copyright SPDX-FileCopyrightText: Copyright 2024-2026 by Michal Protasowicki
@@ -18,7 +18,6 @@ from typing import Any
 _set_scan_widget_state_cb: object = None
 _neighbours_handle: object = None
 _event_info_handle: object = None
-_nodes: dict = {}
 _progress_observers: list = []
 _filter_blocking_observers = []
 _auto_discovery_enabled: bool = False
@@ -111,37 +110,6 @@ def event_info_handle() -> object:
         object: The event info UI object, or None if not set.
     """
     return _event_info_handle
-
-
-def set_node_info(key: int, value: Any) -> None:
-    """
-    Updates or adds information for a specific node in the local cache.
-
-    Args:
-        key (int): The node ID (nickname).
-        value (Any): The node information structure.
-    """
-    _nodes[key] = value
-
-
-def get_node_info(key) -> Any:
-    """
-    Retrieves information for a specific node from the local cache.
-
-    Args:
-        key (int): The node ID (nickname).
-
-    Returns:
-        Any: The node information structure, or None if not found.
-    """
-    return _nodes.get(key, None)
-
-
-def get_nodes() -> dict:
-    """
-    Retrieves the entire dictionary of cached node information.
-    """
-    return _nodes
 
 
 def add_filter_blocking_observer(callback):
