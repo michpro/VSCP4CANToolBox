@@ -172,20 +172,25 @@ class CTkTreeview(ctk.CTkFrame): # pylint: disable=too-many-ancestors, too-many-
         return result
 
 
-    def insert_items(self, items, parent=''):
+    def insert_items(self, items, parent='', auto_scroll=True):
         """
         Recursive method to insert items into the treeview.
         Applies active filter to new items (hides them if they don't match).
+        Supports 'open' key to set initial expansion state.
+        Supports 'auto_scroll' parameter to toggle scrolling to inserted item.
 
         Args:
             items: List of dictionaries representing rows and children.
             parent: The parent item ID (default is root).
+            auto_scroll: If True (default), ensures the inserted item is visible.
         """
         for item in items:
             if isinstance(item, dict):
                 text = item['text'] if 'text' in item else ''
                 values = item['values'] if 'values' in item else []
-                row = self.treeview.insert(parent, 'end', text=text, values=values)
+                is_open = item.get('open', False)
+
+                row = self.treeview.insert(parent, 'end', text=text, values=values, open=is_open)
 
                 # Check active filter for the new item
                 if self._filter_condition is not None:
@@ -195,10 +200,9 @@ class CTkTreeview(ctk.CTkFrame): # pylint: disable=too-many-ancestors, too-many-
                         self._hidden_items.append((row, parent, idx))
 
                 if 'child' in item:
-                    self.insert_items(item['child'], row)
+                    self.insert_items(item['child'], row, auto_scroll=auto_scroll)
 
-                # Only scroll to see if item is actually visible
-                if self.treeview.exists(row):
+                if auto_scroll and self.treeview.exists(row):
                     self.treeview.see(row)
 
 

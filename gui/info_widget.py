@@ -209,15 +209,19 @@ class AutoScrollableFrame(ctk.CTkFrame): # pylint: disable=too-many-ancestors
 
 
     def _on_mouse_wheel(self, event):
-        """Handle mouse wheel scrolling only if scrollbar is active."""
-        if self.scrollbar.winfo_ismapped():
-            try:
+        """
+        Handle mouse wheel scrolling.
+        Wrapped in try-except to prevent TclError (bad window path) when bind_all
+        triggers on destroyed widgets.
+        """
+        try:
+            if self.scrollbar.winfo_ismapped():
                 if event.num == 5 or event.delta < 0:
                     self.canvas.yview_scroll(1, "units")
                 elif event.num == 4 or event.delta > 0:
                     self.canvas.yview_scroll(-1, "units")
-            except Exception: # pylint: disable=broad-exception-caught
-                pass
+        except Exception: # pylint: disable=broad-exception-caught
+            pass
 
 
 class RichTextTable(ctk.CTkFrame): # pylint: disable=too-many-ancestors

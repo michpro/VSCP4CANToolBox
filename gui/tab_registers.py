@@ -132,10 +132,10 @@ class RegistersTab(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
                        'values': [data['access'], data['value'], data['to_sync'], data['name']]}
                 child.append(row)
             text = f'Page {page:d}' if 0 <= page else 'Standard regs'
-            entry = {'text': text, 'child': child}
+            entry = {'text': text, 'child': child, 'open': False}
             result.append(entry)
         if result:
-            self.registers.insert_items(result)
+            self.registers.insert_items(result, auto_scroll=False)
 
 
     def _on_treeview_click(self, event):
