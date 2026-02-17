@@ -10,7 +10,6 @@ It provides a mechanism to start and stop the server in a separate thread.
 @license SPDX-License-Identifier: MIT
 """
 
-# pylint: disable=
 
 import threading
 import http.server
@@ -29,7 +28,6 @@ class HttpRequestHandler(http.server.SimpleHTTPRequestHandler):
         """
         Overrides log_message to suppress standard logging to stderr.
         """
-        pass
 
 
     def do_GET(self):
@@ -38,10 +36,16 @@ class HttpRequestHandler(http.server.SimpleHTTPRequestHandler):
 
         Redirects '/favicon.ico' requests to the correct local path for the
         VSCP logo icon before delegating to the superclass handler.
+        Handles connection errors gracefully.
         """
         if '/favicon.ico' == self.path:
             self.path = '/gui/icons/vscp_logo.ico' # pylint: disable=attribute-defined-outside-init
-        return http.server.SimpleHTTPRequestHandler.do_GET(self)
+
+        try:
+            http.server.SimpleHTTPRequestHandler.do_GET(self)
+        except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError):
+            # Client disconnected before response was fully sent.
+            pass
 
 
 class HttpLocalServer:
@@ -61,6 +65,7 @@ class HttpLocalServer:
         self.thread = None
         port = 80
         http_handler = HttpRequestHandler
+        socketserver.TCPServer.allow_reuse_address = True
         self.server = socketserver.TCPServer(("", port), http_handler)
 
 
@@ -84,6 +89,7 @@ class HttpLocalServer:
         Starts the HTTP server in a separate daemon thread.
         """
         self.thread = threading.Thread(None, self._run)
+        self.thread.daemon = True
         self.thread.start()
 
 
@@ -93,8 +99,10 @@ class HttpLocalServer:
 
         Shuts down the server socket and waits for the server thread to join.
         """
-        self.server.shutdown()
-        self.thread.join()
+        if self.server:
+            self.server.shutdown()
+        if self.thread and self.thread.is_alive():
+            self.thread.join()
 
 
 server = HttpLocalServer()
