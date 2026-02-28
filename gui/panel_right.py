@@ -128,10 +128,11 @@ class Messages(ctk.CTkFrame): # pylint: disable=too-many-ancestors
                         if is_new_node or is_heartbeat or is_probe_response:
                             try:
                                 node_id = int(node_id_str, 16)
+                                controller_id = vscp.get_this_node_nickname()
 
                                 # Check conditions to trigger discovery:
-                                # Only if Node is NOT in the list
-                                if not vscp.is_node_on_list(node_id) and node_id not in self._discovery_pending: # pylint: disable=line-too-long
+                                # Only if Node is NOT the controller itself and NOT in the list
+                                if node_id != controller_id and not vscp.is_node_on_list(node_id) and node_id not in self._discovery_pending: # pylint: disable=line-too-long
                                     self._discovery_pending.add(node_id)
                                     # SCHEDULE DISCOVERY WITH DELAY
                                     # Instead of running immediately, we wait 200ms.

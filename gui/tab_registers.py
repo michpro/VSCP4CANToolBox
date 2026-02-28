@@ -61,7 +61,8 @@ class RegistersTab(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
         self.registers.enable_cell_editing(columns=['value'],
                                            edit_callback=self._on_cell_edit,
                                            permission_callback=self._can_edit_cell,
-                                           input_validation=self._validate_input)
+                                           input_validation=self._validate_input,
+                                           format_callback=self._format_input)
 
         self.registers.treeview.bind('<<TreeviewSelect>>', self._update_registers_info)
         self.registers.treeview.bind('<Button-3>', lambda event: self._show_menu(event, self.dropdown))
@@ -521,31 +522,81 @@ class RegistersTab(ctk.CTkFrame): # pylint: disable=too-many-instance-attributes
         return result
 
 
-    def _validate_input(self, input_str):
+    def _format_input(self, text):
         """
-        Validate input range (0-254) and hex format.
-        Also prevents deletion of the '0x' prefix.
+        Dynamically format entry text (e.g., uppercase hex values).
         """
+        if text.lower().startswith('0x'):
+            return text[:2].lower() + text[2:].upper()
+        return text
+
+
+    def _validate_input(self, input_str, row_id=None, _col_key=None):  # pylint: disable=too-many-return-statements, too-many-branches
+        """
+        Validate input format and max limits during keystrokes.
+        """
+        input_lower = input_str.lower()
+
         # Block removal of '0x'
-        if not input_str.lower().startswith('0x'):
+        if not input_lower.startswith('0x'):
             return False
 
-        result = True
-        if 0 != len(input_str):
-            if input_str.lower().startswith('0x'):
-                if 2 < len(input_str):
-                    if input_str.startswith('0x00'):
-                        result = False
-                    else:
-                        try:
-                            # Just check if it's valid hex
-                            int(input_str, 16)
-                            result = True
-                        except ValueError:
-                            result = False
-            else:
-                result = False
-        return result
+        # Allow just '0x' so the user can clear the field before typing a new value
+        if len(input_lower) == 2:
+            return True
+
+        try:
+            val_int = int(input_lower, 16)
+        except ValueError:
+            return False
+
+        if row_id and self.registers.treeview.exists(row_id): # pylint: disable=too-many-nested-blocks
+            try:
+                parent_id = self.registers.treeview.parent(row_id)
+                if parent_id:
+                    parent_text = self.registers.treeview.item(parent_id, 'text')
+                    page = int(parent_text.split(' ')[1]) if 'Page' in parent_text else -1
+
+                    reg_text = self.registers.treeview.item(row_id, 'text')
+                    reg_addr = int(reg_text, 16)
+
+                    if page in self.registers_data and reg_addr in self.registers_data[page]:
+                        reg_info = self.registers_data[page][reg_addr]
+                        max_val = 0xFF
+
+                        if 'valuelist' in reg_info and reg_info['valuelist']:
+                            max_val = 0xFF
+                        else:
+                            width_limit = 0xFF
+                            if 'width' in reg_info and reg_info['width'] is not None:
+                                try:
+                                    w_val = int(str(reg_info['width']), 0)
+                                    if 0 <= w_val < 8:
+                                        width_limit = (1 << w_val) - 1
+                                except (ValueError, TypeError):
+                                    pass
+
+                            if 'max' in reg_info and reg_info['max'] is not None:
+                                try:
+                                    max_val = int(str(reg_info['max']), 0)
+                                except (ValueError, TypeError):
+                                    pass
+
+                            max_val = min(max_val, width_limit)
+
+                        if val_int > max_val:
+                            return False
+
+                        max_chars = max(4, len(hex(max_val)))
+                        if len(input_str) > max_chars:
+                            return False
+            except Exception: # pylint: disable=broad-except
+                pass
+        else:
+            if len(input_str) > 4:
+                return False
+
+        return True
 
 
     def _on_cell_edit(self, row_id, _col_key, _old_val, _new_val, _row_data): # pylint: disable=too-many-branches, too-many-statements, too-many-locals

@@ -15,6 +15,7 @@ import string
 import random
 from typing import Any, cast
 from tkinter import ttk
+import inspect
 import customtkinter as ctk
 from PIL import Image, ImageTk
 
@@ -63,14 +64,21 @@ class CTkTreeview(ctk.CTkFrame): # pylint: disable=too-many-ancestors, too-many-
         self.xscroll = xscroll
         self.yscroll = yscroll
         self.entry_popup = None
-        self.editable_columns = None  # List of editable column keys
-        self.edit_callback = None # Callback function for validation
-        self.permission_callback = None # Callback function for edit permission
-        self.input_validation = None # Callback for Entry keystroke validation
-        self._hidden_items = [] # List to store hidden items: (item_id, parent_id, index)
-        self._modified_cells = set() # Set to store (item_id, column_key) of modified cells
-        self._filter_condition = None # Function to check if item should be visible
+        self.entry_popup_var = None
+        self.editable_columns = None
+        self.edit_callback = None
+        self.permission_callback = None
+        self.input_validation = None
+        self.format_callback = None
+        self._hidden_items = []
+        self._modified_cells = set()
+        self._filter_condition = None
+
         super().__init__(self.parent)
+
+        self._current_edit_row = None
+        self._current_edit_col = None
+        self._vcmd = (self.register(self._internal_validate), '%P')
 
         self.bg_color = self.parent._apply_appearance_mode(ctk.ThemeManager.theme['CTkFrame']['fg_color'])
         self.text_color = self.parent._apply_appearance_mode(ctk.ThemeManager.theme['CTkLabel']['text_color'])
@@ -172,6 +180,35 @@ class CTkTreeview(ctk.CTkFrame): # pylint: disable=too-many-ancestors, too-many-
         return result
 
 
+    def _internal_validate(self, new_text):
+        """Internal wrapper for keystroke validation to prevent Tcl memory leaks."""
+        if self.input_validation:
+            try:
+                sig = inspect.signature(self.input_validation)
+                if len(sig.parameters) == 1:
+                    return self.input_validation(new_text)
+            except ValueError:
+                pass
+            return self.input_validation(new_text, self._current_edit_row, self._current_edit_col)
+        return True
+
+
+    def _on_key_release(self, _):
+        """Execute external format callback on key release if provided."""
+        if not hasattr(self, 'entry_popup_var') or self.entry_popup_var is None:
+            return
+
+        if self.format_callback:
+            current_str = self.entry_popup_var.get()
+            formatted_str = self.format_callback(current_str)
+
+            if formatted_str is not None and formatted_str != current_str:
+                cursor_pos = self.entry_popup.index('insert') if self.entry_popup else 'end'
+                self.entry_popup_var.set(formatted_str)
+                if self.entry_popup:
+                    self.entry_popup.icursor(cursor_pos)
+
+
     def insert_items(self, items, parent='', auto_scroll=True):
         """
         Recursive method to insert items into the treeview.
@@ -248,7 +285,7 @@ class CTkTreeview(ctk.CTkFrame): # pylint: disable=too-many-ancestors, too-many-
                 self.treeview.item(item_id, tags=current_tags)
 
 
-    def enable_cell_editing(self, columns=None, edit_callback=None, permission_callback=None, input_validation=None): # pylint: disable=line-too-long
+    def enable_cell_editing(self, columns=None, edit_callback=None, permission_callback=None, input_validation=None, format_callback=None): # pylint: disable=line-too-long
         """
         Enable editing of cells on double-click.
 
@@ -268,12 +305,15 @@ class CTkTreeview(ctk.CTkFrame): # pylint: disable=too-many-ancestors, too-many-
                                    - True: Allow editing
                                    - False: Prevent editing
             input_validation: A function to validate input on keypress.
-                              Signature: callback(new_text) -> bool
+                              Signature: callback(new_text, row_id, col_key) -> bool
+            format_callback: A function to dynamically format text on key release.
+                             Signature: callback(current_text) -> str
         """
         self.editable_columns = columns
         self.edit_callback = edit_callback
         self.permission_callback = permission_callback
         self.input_validation = input_validation
+        self.format_callback = format_callback
         self.treeview.bind("<Double-Button-1>", self._on_double_click)
 
 
@@ -310,7 +350,6 @@ class CTkTreeview(ctk.CTkFrame): # pylint: disable=too-many-ancestors, too-many-
         if not row_id:
             return
 
-        # Calculate column index and key
         if column == '#0':
             col_idx = -1
             current_key = '#0'
@@ -340,10 +379,14 @@ class CTkTreeview(ctk.CTkFrame): # pylint: disable=too-many-ancestors, too-many-
             if not self.permission_callback(row_id, current_key, str(current_value), row_data):
                 return
 
+        self._current_edit_row = row_id
+        self._current_edit_col = current_key
+
         validate_kw = {}
         if self.input_validation:
-            vcmd = (self.register(self.input_validation), '%P')
-            validate_kw = {'validate': 'key', 'validatecommand': vcmd}
+            validate_kw = {'validate': 'key', 'validatecommand': self._vcmd}
+
+        self.entry_popup_var = ctk.StringVar(value=str(current_value))
 
         self.entry_popup = ctk.CTkEntry(
             self.treeview,
@@ -353,11 +396,13 @@ class CTkTreeview(ctk.CTkFrame): # pylint: disable=too-many-ancestors, too-many-
             bg_color=self.bg_color,
             text_color=self.text_color,
             corner_radius=5,
+            textvariable=self.entry_popup_var,
             **validate_kw
         )
         self.entry_popup.place(x=bbox[0], y=bbox[1])
-        self.entry_popup.insert(0, str(current_value))
         self.entry_popup.focus()
+        self.entry_popup.icursor('end')
+        self.entry_popup.bind("<KeyRelease>", self._on_key_release)
         self.entry_popup.bind("<Return>", lambda e: self._on_edit_confirm(row_id, col_idx))
         self.entry_popup.bind("<FocusOut>", lambda e: self._on_edit_cancel())
         self.entry_popup.bind("<Escape>", lambda e: self._on_edit_cancel())
@@ -414,6 +459,7 @@ class CTkTreeview(ctk.CTkFrame): # pylint: disable=too-many-ancestors, too-many-
         if self.entry_popup:
             self.entry_popup.destroy()
             self.entry_popup = None
+            self.entry_popup_var = None
 
 
     def filter_view(self, condition_func):
@@ -429,14 +475,9 @@ class CTkTreeview(ctk.CTkFrame): # pylint: disable=too-many-ancestors, too-many-
             condition_func: A function that takes (text, values) and returns bool.
                             True = Show row, False = Hide row.
         """
-        # Restore items and clear previous filter condition
         self.clear_filters()
-
-        # Set new filter condition
         self._filter_condition = condition_func
 
-        # Retrieve all items recursively to check against the filter
-        # We need to collect IDs first, then process, to avoid issues while modifying the tree
         def get_all_items(parent=""):
             items = []
             children = self.treeview.get_children(parent)
