@@ -17,6 +17,7 @@ import json
 from tkinter import filedialog
 import customtkinter as ctk
 import vscp
+from .common import set_app_icon
 from .tooltip import ToolTip
 
 
@@ -46,7 +47,7 @@ class MessageFilters(ctk.CTkToplevel): # pylint: disable=too-many-instance-attri
         current_path = os.path.dirname(os.path.realpath(__file__))
         icon_dir = os.path.join(current_path, 'icons')
         icon_path = os.path.join(icon_dir, 'vscp_logo.ico')
-        self.after(250, lambda: self.iconbitmap(icon_path))
+        self.after(250, lambda: set_app_icon(self, icon_path))
 
         width = 1000
         height = 656

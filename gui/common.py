@@ -10,9 +10,9 @@ and references to main UI handles.
 @copyright SPDX-FileCopyrightText: Copyright 2024-2026 by Michal Protasowicki
 @license SPDX-License-Identifier: MIT
 """
-# pylint: disable=line-too-long
 
-from typing import Any
+
+import sys
 
 
 _set_scan_widget_state_cb: object = None
@@ -146,3 +146,17 @@ def is_auto_discovery_enabled() -> bool:
     Checks if auto-discovery is enabled.
     """
     return _auto_discovery_enabled
+
+
+def set_app_icon(window, icon_path: str):
+    """Sets the window icon across different OS."""
+    if sys.platform.startswith("win"):
+        window.iconbitmap(icon_path)
+    else:
+        try:
+            from PIL import Image, ImageTk # pylint: disable=import-outside-toplevel
+            image = Image.open(icon_path).convert("RGBA")
+            window._app_icon = ImageTk.PhotoImage(image) # Keep a reference to prevent garbage collection # pylint: disable=protected-access
+            window.tk.call('wm', 'iconphoto', window._w, "-default", window._app_icon) # Bypass python wrappers to avoid Pylance false positives # pylint: disable=protected-access
+        except Exception: # pylint: disable=broad-exception-caught
+            pass

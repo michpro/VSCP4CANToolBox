@@ -15,6 +15,7 @@ import ctypes
 import datetime
 import platform
 import customtkinter as ctk
+from .common import set_app_icon
 from .menu import Menu
 from .panels import AppFrame
 from .status import StatusFrame
@@ -52,7 +53,8 @@ class Application(ctk.CTk): # pylint: disable=too-few-public-methods
             ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(appid)
 
         self._set_appearance_mode('system')
-        self.iconbitmap(icon_path)
+
+        set_app_icon(self, icon_path)
         self.title('VSCP ToolBox v' + self.version)
 
         x = int((self.winfo_screenwidth() / 2) - (self.width / 2))

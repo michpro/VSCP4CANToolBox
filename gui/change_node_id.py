@@ -11,6 +11,7 @@ import os
 import customtkinter as ctk
 from CTkMessagebox import CTkMessagebox
 import vscp
+from .common import set_app_icon
 
 
 class ChangeNodeId(ctk.CTkToplevel): # pylint: disable=too-many-instance-attributes
@@ -36,7 +37,7 @@ class ChangeNodeId(ctk.CTkToplevel): # pylint: disable=too-many-instance-attribu
         current_path = os.path.dirname(os.path.realpath(__file__))
         icon_dir = os.path.join(current_path, 'icons')
         icon_path = os.path.join(icon_dir, 'vscp_logo.ico')
-        self.after(250, lambda: self.iconbitmap(icon_path))
+        self.after(250, lambda: set_app_icon(self, icon_path))
 
         width = 270
         height = 130

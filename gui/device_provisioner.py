@@ -14,6 +14,7 @@ and idle state, as well as a delay timer.
 import os
 from typing import Callable
 import customtkinter as ctk
+from .common import set_app_icon
 
 
 class DeviceProvisioner(ctk.CTkToplevel): # pylint: disable=too-many-instance-attributes
@@ -41,7 +42,7 @@ class DeviceProvisioner(ctk.CTkToplevel): # pylint: disable=too-many-instance-at
         current_path = os.path.dirname(os.path.realpath(__file__))
         icon_dir = os.path.join(current_path, 'icons')
         icon_path = os.path.join(icon_dir, 'vscp_logo.ico')
-        self.after(250, lambda: self.iconbitmap(icon_path))
+        self.after(250, lambda: set_app_icon(self, icon_path))
 
         width = 280
         height = 235

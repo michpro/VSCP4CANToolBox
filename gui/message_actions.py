@@ -17,7 +17,8 @@ import re
 from tkinter import filedialog
 import customtkinter as ctk
 import vscp
-from gui.tooltip import ToolTip
+from .common import set_app_icon
+from .tooltip import ToolTip
 
 
 class MessageActions(ctk.CTkToplevel): # pylint: disable=too-many-instance-attributes
@@ -38,7 +39,7 @@ class MessageActions(ctk.CTkToplevel): # pylint: disable=too-many-instance-attri
         current_path = os.path.dirname(os.path.realpath(__file__))
         icon_path = os.path.join(current_path, 'icons', 'vscp_logo.ico')
         if os.path.exists(icon_path):
-            self.after(250, lambda: self.iconbitmap(icon_path))
+            self.after(250, lambda: set_app_icon(self, icon_path))
 
         width = 1400
         height = 760
