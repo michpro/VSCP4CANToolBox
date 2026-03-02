@@ -29,6 +29,7 @@ from .popup import CTkFloatingWindow
 from .node_config import NodeConfiguration
 from .change_node_id import ChangeNodeId
 from .device_provisioner import DeviceProvisioner
+from .http_server import get_http_server_port
 
 
 class AlignedReverseCheckBox(ctk.CTkFrame): # pylint: disable=too-many-ancestors
@@ -739,7 +740,8 @@ class Neighbours(ctk.CTkFrame): # pylint: disable=too-many-ancestors, too-many-i
         mdf_link = self._get_mdf_link()
         # Handle local proxy/tunneling if applicable
         if 'vscp.local' in mdf_link.lower():
-            mdf_link = re.sub(re.escape('vscp.local'), 'localhost', mdf_link, flags=re.IGNORECASE)
+            link_subst = f'localhost:{get_http_server_port()}'
+            mdf_link = re.sub(re.escape('vscp.local'), link_subst, mdf_link, flags=re.IGNORECASE)
         mdf = ''
         try:
             req = requests.get(mdf_link, timeout=5)

@@ -16,6 +16,9 @@ import http.server
 import socketserver
 
 
+HTTP_PORT = 8080
+
+
 class HttpRequestHandler(http.server.SimpleHTTPRequestHandler):
     """
     Custom HTTP Request Handler.
@@ -60,13 +63,12 @@ class HttpLocalServer:
         """
         Initializes the HttpLocalServer.
 
-        Sets up the TCP server on port 80 with the custom HttpRequestHandler.
+        Sets up the TCP server on port 8080 with the custom HttpRequestHandler.
         """
         self.thread = None
-        port = 80
         http_handler = HttpRequestHandler
         socketserver.TCPServer.allow_reuse_address = True
-        self.server = socketserver.TCPServer(("", port), http_handler)
+        self.server = socketserver.TCPServer(("", HTTP_PORT), http_handler)
 
 
     def _run(self):
@@ -103,6 +105,11 @@ class HttpLocalServer:
             self.server.shutdown()
         if self.thread and self.thread.is_alive():
             self.thread.join()
+
+
+def get_http_server_port() -> int:
+    """Function returns the port number on which the local HTTP server is running."""
+    return HTTP_PORT
 
 
 server = HttpLocalServer()
