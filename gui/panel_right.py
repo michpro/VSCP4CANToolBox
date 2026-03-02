@@ -23,6 +23,7 @@ from .common import add_event_info_handle, event_info_handle, neighbours_handle,
                     add_filter_blocking_observer, is_auto_discovery_enabled
 from .popup import CTkFloatingWindow
 from .message_filters import MessageFilters
+from .message_actions import MessageActions
 
 
 class Messages(ctk.CTkFrame): # pylint: disable=too-many-ancestors
@@ -46,6 +47,9 @@ class Messages(ctk.CTkFrame): # pylint: disable=too-many-ancestors
 
         # Set to track nodes that are currently being discovered to prevent redundant async calls
         self._discovery_pending = set()
+
+        # Observers for newly inserted message rows
+        self._message_insert_observers = []
 
         # Header structure: (id, text, width, minwidth, anchor, cell_anchor)
         header = [('', '', 0, 0, 'center', 'w'),
@@ -78,6 +82,12 @@ class Messages(ctk.CTkFrame): # pylint: disable=too-many-ancestors
         # pylint: enable=line-too-long
 
 
+    def add_message_insert_observer(self, callback):
+        """Add callback to be executed when a new message is inserted."""
+        if callable(callback):
+            self._message_insert_observers.append(callback)
+
+
     def _parse_msg_data(self, _):
         """
         Callback triggered when a treeview row is selected.
@@ -104,6 +114,12 @@ class Messages(ctk.CTkFrame): # pylint: disable=too-many-ancestors
                       [timestamp, dir, id, priority, class, type, data]
         """
         self.messages.insert_items(row_data)
+
+        # Notify observers about new messages (e.g. Action triggers)
+        for item in row_data:
+            values = item.get('values', [])
+            for observer in self._message_insert_observers:
+                observer(values)
 
         # Auto-discovery logic
         if is_auto_discovery_enabled(): # pylint: disable=too-many-nested-blocks
@@ -360,7 +376,7 @@ class RightPanel(ctk.CTkFrame): # pylint: disable=too-few-public-methods, too-ma
     Main container for the right panel of the application.
 
     Holds the Messages widget (the log list), the EventInfo widget (the detail view),
-    and the MessageFilters widget.
+    the MessageFilters widget, and the MessageActions widget.
     """
 
     def __init__(self, parent):
@@ -385,8 +401,8 @@ class RightPanel(ctk.CTkFrame): # pylint: disable=too-few-public-methods, too-ma
         self.info_panel = ctk.CTkFrame(self.bottom_container)
         self.info_panel.pack(side='left', fill='both', expand=True, padx=0)
 
-        self.filter_panel = ctk.CTkFrame(self.bottom_container)
-        self.filter_panel.pack(side='left', fill='both', expand=True, padx=(5, 0))
+        self.tools_panel = ctk.CTkFrame(self.bottom_container)
+        self.tools_panel.pack(side='left', fill='both', expand=True, padx=(5, 0))
 
         self.info = EventInfo(self.info_panel)
         add_event_info_handle(self.info)
@@ -395,15 +411,32 @@ class RightPanel(ctk.CTkFrame): # pylint: disable=too-few-public-methods, too-ma
         self.filters_window = MessageFilters(self, self.messages.messages)
         self._filters_active = False
 
+        # Initialize the actions configuration window (hidden by default)
+        self.actions_window = MessageActions(self)
+
+        # Register actions engine to process incoming messages for reactive triggers
+        self.messages.add_message_insert_observer(self.actions_window.process_incoming_message)
+
         # Register callback to handle filter blocking requests from other modules
         add_filter_blocking_observer(self._handle_filter_blocking)
 
         # pylint: disable=line-too-long
-        ctk.CTkLabel(self.filter_panel, text="Filters:", anchor="w").pack(side="left", fill="x", padx=(15, 5), pady=5, anchor="n")
-        ctk.CTkButton(self.filter_panel, text="Configure", width=120, command=self.filters_window.deiconify).pack(side="left", padx=0, pady=5, anchor="n")
-        ctk.CTkButton(self.filter_panel, text="Apply", width=120, command=self._apply_filters, fg_color="green").pack(side="left", padx=(3, 0), pady=5, anchor="n")
-        ctk.CTkButton(self.filter_panel, text="Clear", width=120, command=self._clear_filters, fg_color="gray").pack(side="left", padx=(3, 0), pady=5, anchor="n")
-        ctk.CTkButton(self.filter_panel, text="Hide All", width=120, command=self.filters_window.block_all, fg_color="#C0392B").pack(side="left", padx=(3, 0), pady=5, anchor="n")
+        # --- Filters Row ---
+        filter_frame = ctk.CTkFrame(self.tools_panel, fg_color="transparent")
+        filter_frame.pack(side="top", fill="x", pady=(5, 0))
+
+        ctk.CTkLabel(filter_frame, text="Filters:", anchor="w", width=55).pack(side="left", padx=(15, 5))
+        ctk.CTkButton(filter_frame, text="Configure", width=120, command=self.filters_window.deiconify).pack(side="left", padx=0)
+        ctk.CTkButton(filter_frame, text="Apply", width=120, command=self._apply_filters, fg_color="green").pack(side="left", padx=(3, 0))
+        ctk.CTkButton(filter_frame, text="Clear", width=120, command=self._clear_filters, fg_color="gray").pack(side="left", padx=(3, 0))
+        ctk.CTkButton(filter_frame, text="Hide All", width=120, command=self.filters_window.block_all, fg_color="#C0392B").pack(side="left", padx=(3, 0))
+
+        # --- Actions Row ---
+        action_frame = ctk.CTkFrame(self.tools_panel, fg_color="transparent")
+        action_frame.pack(side="top", fill="x", pady=(8, 0))
+
+        ctk.CTkLabel(action_frame, text="Actions:", anchor="w", width=55).pack(side="left", padx=(15, 5))
+        ctk.CTkButton(action_frame, text="Configure & Run", width=243, command=self.actions_window.deiconify).pack(side="left", padx=0)
         # pylint: enable=line-too-long
 
 

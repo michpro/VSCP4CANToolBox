@@ -21,4 +21,4 @@ from vscp.tools import  set_async_work, is_async_work,                  \
                         add_node_id_observer, update_node_id,           \
                         extended_page_read_register,                    \
                         extended_page_write_register, firmware_upload,  \
-                        drop_nickname_reset_device
+                        drop_nickname_reset_device, send_vscp_event

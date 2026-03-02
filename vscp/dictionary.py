@@ -13,6 +13,7 @@ It contains extensive definitions of VSCP Class 1 protocol definitions.
 
 
 import os
+import struct
 from copy import deepcopy
 from datetime import datetime
 from functools import singledispatchmethod
@@ -35,6 +36,245 @@ class Dictionary:
 
     def __init__(self) -> None:
         """Initializes the Dictionary instance."""
+
+
+    def construct_data(self, class_var, type_var, *args) -> list: # pylint: disable=too-many-locals
+        """
+        Constructs a raw data byte list from human-readable arguments based on the dictionary definition.
+
+        Args:
+            class_var (int/str): Class ID or Name.
+            type_var (int/str): Type ID or Name.
+            *args: Variable length argument list matching the 'dlc' definition order.
+
+        Returns:
+            list: A list of integers (bytes) representing the VSCP data payload.
+        """
+        class_id = class_var if isinstance(class_var, int) else self.class_id(class_var)
+        type_id = type_var if isinstance(type_var, int) else self.type_id(class_id, type_var)
+
+        data_descr = self._get_data_description(class_id, type_id)
+
+        # If no description or no arguments provided, return what was passed if it looks like raw data, else empty
+        if not data_descr or 'dlc' not in data_descr:
+            return list(args[0]) if args and isinstance(args[0], list) else []
+
+        constructed_data = []
+        dlc_def = data_descr['dlc']
+
+        # The 'dlc' dict keys usually correspond to the sequence index (0, 1, 2...)
+        # We iterate through them in order.
+        sorted_keys = sorted(dlc_def.keys())
+
+        current_arg_index = 0
+
+        for key in sorted_keys:
+            if current_arg_index >= len(args):
+                break # Stop if we run out of provided arguments
+
+            item = dlc_def[key]
+            length = item.get('l', 1)
+            data_type = item.get('t', 'raw')
+
+            val = args[current_arg_index]
+
+            # Encode the value
+            bytes_list = self._encode(data_type, val, length)
+            constructed_data.extend(bytes_list)
+
+            current_arg_index += 1
+
+        return constructed_data
+
+
+    def get_event_parameters(self, class_var, type_var) -> list: # pylint: disable=too-many-locals
+        """
+        Retrieves a list of parameters required to construct the event data.
+        Used for generating UI input fields dynamically.
+
+        Args:
+            class_var (int/str): Class ID or Name.
+            type_var (int/str): Type ID or Name.
+
+        Returns:
+            list: A list of dictionaries, where each dictionary describes a parameter:
+                  {
+                      'name': str,          # Human readable name
+                      'type': str,          # VSCP data type (uint, int, choice, etc.)
+                      'length': int,        # Length in bytes
+                      'constraint': mixed   # Min/Max dict for numbers, List of tuples for choices
+                  }
+        """
+        class_id = class_var if isinstance(class_var, int) else self.class_id(class_var)
+        type_id = type_var if isinstance(type_var, int) else self.type_id(class_id, type_var)
+
+        data_descr = self._get_data_description(class_id, type_id)
+
+        if not data_descr or 'dlc' not in data_descr:
+            return []
+
+        parameters = []
+        dlc_def = data_descr['dlc']
+        sorted_keys = sorted(dlc_def.keys())
+
+        for key in sorted_keys:
+            item = dlc_def[key]
+            name = item.get('n', f"Param {key}")
+            dtype = item.get('t', 'raw')
+            length = item.get('l', 1)
+
+            # Check for explicit value lists (choices) in the definition
+            # Some definitions might carry a 'values' or 'v' key pointing to a list/dict
+            defined_choices = item.get('values', item.get('v', None))
+
+            constraint = self._get_type_constraints(dtype, length, defined_choices)
+
+            parameters.append({
+                'name': name,
+                'type': dtype,
+                'length': length,
+                'constraint': constraint
+            })
+
+        return parameters
+
+
+    def _get_type_constraints(self, data_type: str, length: int, defined_choices=None): # pylint: disable=too-many-return-statements
+        """
+        Calculates the valid range or choices for a given data type.
+        """
+        # 1. If explicit choices are provided in the definition, return them formatted
+        if defined_choices:
+            if isinstance(defined_choices, dict):
+                return [(k, v) for k, v in defined_choices.items()]
+            if isinstance(defined_choices, list):
+                return defined_choices # Assume it's already a list of tuples/values
+
+        # 2. Handle standard types
+        if data_type in ('uint', 'hexint', 'ruint', 'measurecoding'):
+            max_val = (2 ** (8 * length)) - 1
+            return {'min': 0, 'max': max_val}
+
+        if data_type == 'int':
+            bits = 8 * length
+            min_val = -(2 ** (bits - 1))
+            max_val = (2 ** (bits - 1)) - 1
+            return {'min': min_val, 'max': max_val}
+
+        if data_type == 'onoffst':
+            return [(0, 'Off'), (1, 'On')]
+
+        if data_type == 'bool':
+            return [(0, 'False'), (1, 'True')]
+
+        # If we had access to specific timeunit lists or similar generic lists,
+        # we would map them here based on data_type name.
+        # Example (conceptual):
+        # elif data_type == 'timeunit':
+        #     return [(0, 'Seconds'), (1, 'Minutes'), ...]
+
+        return None # No specific constraint for raw, string, ipv4, etc.
+
+
+    def _encode(self, data_type: str, val, length: int) -> list:
+        """Dispatches encoding to specific method."""
+        func_map = {
+            'int':      self._encode_int,
+            'uint':     self._encode_uint,
+            'hexint':   self._encode_uint, # hexint is just display format, storage is uint
+            'ruint':    self._encode_uint,
+            'float':    self._encode_float,
+            'onoffst':  self._encode_onoff,
+            'ipv4':     self._encode_ipv4,
+            'ascii':    self._encode_ascii,
+            'utf8':     self._encode_utf8,
+            'raw':      self._encode_raw,
+            'measurecoding': self._encode_measurecoding # Simplified handling
+        }
+
+        handler = func_map.get(data_type, self._encode_raw)
+        return handler(val, length)
+
+
+    def _encode_int(self, val, length):
+        """Encodes signed integer."""
+        try:
+            val = int(val)
+            return list(val.to_bytes(length, 'big', signed=True))
+        except (ValueError, OverflowError):
+            return [0] * length
+
+
+    def _encode_uint(self, val, length):
+        """Encodes unsigned integer."""
+        try:
+            val = int(val)
+            return list(val.to_bytes(length, 'big', signed=False))
+        except (ValueError, OverflowError):
+            return [0] * length
+
+
+    def _encode_float(self, val, _length):
+        """Encodes float (32-bit big endian). Ignores length arg, assumes 4."""
+        try:
+            # VSCP uses standard IEEE 754 Big Endian
+            return list(struct.pack('>f', float(val)))
+        except (ValueError, struct.error):
+            return [0, 0, 0, 0]
+
+
+    def _encode_onoff(self, val, _length):
+        """Encodes boolean/state to 1 (On) or 0 (Off)."""
+        return [1] if val else [0]
+
+
+    def _encode_ipv4(self, val, _length):
+        """Encodes IPv4 string '192.168.1.1' to bytes."""
+        try:
+            if isinstance(val, str):
+                parts = [int(p) for p in val.split('.')]
+                if len(parts) == 4:
+                    return parts
+            elif isinstance(val, (list, tuple)) and len(val) == 4:
+                return list(val)
+        except ValueError:
+            pass
+        return [0] * 4
+
+
+    def _encode_ascii(self, val, length):
+        """Encodes string to ASCII bytes, truncated or padded."""
+        s_val = str(val).encode('ascii', errors='replace')
+        return self._fit_to_length(list(s_val), length)
+
+
+    def _encode_utf8(self, val, length):
+        """Encodes string to UTF-8 bytes, truncated or padded."""
+        s_val = str(val).encode('utf-8', errors='replace')
+        return self._fit_to_length(list(s_val), length)
+
+
+    def _encode_raw(self, val, length):
+        """Handles raw list of bytes."""
+        if isinstance(val, int):
+            return self._encode_uint(val, length)
+        if isinstance(val, (list, bytes, bytearray)):
+            return self._fit_to_length(list(val), length)
+        return [0] * length
+
+
+    def _encode_measurecoding(self, val, length):
+        """Simple pass-through for coding byte if provided as int."""
+        return self._encode_uint(val, length)
+
+
+    def _fit_to_length(self, data_list, length):
+        """Truncates or pads list with zeros to match length."""
+        if len(data_list) > length:
+            return data_list[:length]
+        if len(data_list) < length:
+            return data_list + [0] * (length - len(data_list))
+        return data_list
 
 
     def get(self) -> list:

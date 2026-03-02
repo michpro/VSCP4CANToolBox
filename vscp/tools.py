@@ -175,6 +175,28 @@ def clear_nodes() -> None:
     _nodes.clear()
 
 
+def send_vscp_event(priority_name: str, class_name: str, type_name: str, data: list, nickname: int | None = None) -> None: # pylint: disable=line-too-long
+    """
+    Constructs and sends an arbitrary VSCP event to the bus.
+
+    Args:
+        priority_name (str): VSCP Priority (e.g., 'Normal low', 'Highest').
+        class_name (str): The VSCP Class name.
+        type_name (str): The VSCP Type name.
+        data (list): The list of raw payload bytes.
+        nickname (int, optional): Custom origin node ID. Defaults to the host controller's nickname.
+    """
+    vscp_msg = {
+        'class':        {'id': None,    'name': class_name},
+        'type':         {'id': None,    'name': type_name},
+        'priority':     {'id': None,    'name': priority_name},
+        'nickName':     nickname if nickname is not None else _this_nickname,
+        'isHardCoded':  False,
+        'data':         data
+    }
+    _message.send(vscp_msg)
+
+
 async def probe_node(nickname: int):
     """
     Probes a specific nickname to check if a node is present.
