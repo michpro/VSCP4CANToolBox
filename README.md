@@ -178,7 +178,16 @@ To run the application, use the dedicated startup scripts which automatically us
 Run the `VSCP4CANToolBox.bat` file.
 
 **Linux / macOS:**
-Run the `VSCP4CANToolBox.sh` script.
+*don't forget to give execution permissions to the file: chmod +x VSCP4CANToolBox.sh*
+
+If you are using the SocketCAN interface:
+```bash
+# check if you have the can0 interface available: ip link show
+sudo ip link set can0 type can bitrate <bitrate_value>
+sudo ip link set can0 up
+```
+
+Finally run the `VSCP4CANToolBox.sh` script.
 ```bash
 ./VSCP4CANToolBox.sh
 ```
