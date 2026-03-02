@@ -58,6 +58,17 @@ The tool offers a range of functions essential for deploying VSCP-based automati
   <img src="./docs/images/filter_options.png" alt="VSCP Filter Options" width="100%">
   </details>
 
+* **Message Actions:** An advanced module for defining and executing automated VSCP events. Users can configure target events and trigger them based on three modes:
+  * **Manual:** Triggered immediately by user interaction.
+  * **Periodic:** Sent repeatedly at a defined time interval (ms).
+  * **Reactive:** Sent automatically in response to specific incoming VSCP events, featuring dynamic payload matching and optional execution delays.
+
+  <details>
+  <summary>📷 View Actions Configuration (click to expand)</summary>
+  <br>
+  <img src="./docs/images/actions_config.png" alt="Actions Configuration" width="100%">
+  </details>
+
 * **Register Configuration:** Read and write device configuration registers (compliant with VSCP specification).
 
   <details>
@@ -65,6 +76,12 @@ The tool offers a range of functions essential for deploying VSCP-based automati
   <img src="./docs/images/registers_config_1.png" alt="Register Configuration" width="100%"><br>
   <img src="./docs/images/registers_config_2.png" alt="Register Configuration" width="100%">
   </details>
+
+* 🚧 **Decision Matrix (Coming Soon):** Configuration of the node's internal Decision Matrix (DM). This will allow users to set up hardware-level logic where the node performs specific actions (e.g., switching relays) in response to defined VSCP events.
+
+* 🚧 **Remote Variables (Coming Soon):** Interface for reading and writing standard VSCP remote variables (such as strings, integers, floats, and booleans) stored directly in the device's memory.
+
+* 🚧 **Files (Coming Soon):** As described in the VSCP documentation: 'This block contains information about files that are related to the module. Pictures, videos, firmware, drivers and manuals are currently defined file types. Setup is reserved for future use.'
 
 * **Firmware Update:** Built-in tool for updating device firmware (Bootloader). Allows convenient uploading of new firmware versions in `*.bin` format directly via the CAN bus.
 
@@ -77,8 +94,6 @@ The tool offers a range of functions essential for deploying VSCP-based automati
 * **Local MDF Server (HTTP):** The application runs a local HTTP server in the background, enabling offline handling of [MDF (Module Description File)](https://grodansparadis.github.io/vscp-doc-spec/#/./vscp_module_description_file) files.
   * If a device reports a configuration file in the `vscp.local` domain (e.g., `http://vscp.local/device_module.mdf`), the program automatically looks for this file in the local `mdf` directory (located in the application folder).
   * This solution allows for full device configuration without external internet access – simply place the appropriate `.mdf` files (containing XML or JSON structure) in the `mdf` folder.
-
-* 🚧 **Event Sending (Coming Soon):** *Feature currently under implementation. In the future, it will allow manual generation and sending of VSCP events to the bus.*
 
 ## **Supported Hardware**
 
