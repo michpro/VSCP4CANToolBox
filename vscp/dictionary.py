@@ -1286,7 +1286,7 @@ class Dictionary:
     def _convert_measurement_zoned_data(self, data: list, units: dict) -> str:
         """Converts zoned measurement data (assumes normalized int)."""
         result = 'CONVERSION ERROR'
-        if 5 <= len(data):
+        if 2 <= len(data):
             coding = self._convert_measurecoding([0x80], units) # coding: normalized int; unit: default
             try:
                 result = self._convert(coding['dataType'], data[:5], {})
