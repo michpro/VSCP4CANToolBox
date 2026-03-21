@@ -1,3 +1,4 @@
+# pylint: disable=too-many-lines
 """
 VSCP Message Actions Module.
 
@@ -24,7 +25,7 @@ from .tooltip import ToolTip
 class MessageActions(ctk.CTkToplevel): # pylint: disable=too-many-instance-attributes
     """
     Control window for configuring VSCP message actions.
-    
+
     Allows defining VSCP events (target events) and rules for when they should
     be transmitted (Manual, Periodic, or Reactive to another event).
     """
@@ -33,6 +34,8 @@ class MessageActions(ctk.CTkToplevel): # pylint: disable=too-many-instance-attri
         # pylint: disable=line-too-long
         """Initialize the actions configuration window."""
         super().__init__(parent)
+
+        self.rx_param_map = {}
 
         # Window setup
         self.title("Actions Configuration")
@@ -230,6 +233,60 @@ class MessageActions(ctk.CTkToplevel): # pylint: disable=too-many-instance-attri
             entry.insert(0, placeholder)
 
 
+    def _update_target_rx_combos(self): # pylint: disable=too-many-branches
+        """Updates available RX parameters across all target dynamic combos."""
+        if not hasattr(self, 'target_param_entries') or not hasattr(self, 'trigger_mode'):
+            return
+
+        mode = self.trigger_mode.get()
+        options = []
+
+        # Populate specific named parameters if Reactive trigger is fully selected
+        if mode == "Reactive" and hasattr(self, 'react_param_entries') and self.react_param_entries:
+            for item in self.react_param_entries:
+                # Use decoded friendly name generated during react_type_change
+                p_name = item.get('friendly_name', item['def']['name'])
+                opt_str = f"{p_name}"
+
+                # Prevent dictionary key collision if VSCP def has duplicate param names
+                original_opt_str = opt_str
+                counter = 1
+                while opt_str in options:
+                    opt_str = f"{original_opt_str} ({counter})"
+                    counter += 1
+
+                options.append(opt_str)
+                self.rx_param_map[opt_str] = {'offset': item['offset'], 'length': item['def']['length']} # pylint: disable=line-too-long
+        else:
+            # Fallback to generic byte indices if Any/* Any * is selected or non-reactive mode
+            for i in range(8):
+                opt_str = f"Byte {i}"
+                options.append(opt_str)
+                self.rx_param_map[opt_str] = {'offset': i, 'length': 1}
+
+        if not options:
+            options = ["Byte 0"]
+            self.rx_param_map["Byte 0"] = {'offset': 0, 'length': 1}
+
+        for t_item in self.target_param_entries:
+            # Manage mode availability based on trigger mode (No 'From RX' if not Reactive)
+            if 'combo_mode' in t_item:
+                if mode == "Reactive":
+                    t_item['combo_mode'].configure(state="normal", values=["Static", "From RX"])
+                else:
+                    t_item['mode_var'].set("Static")
+                    t_item['combo_mode'].configure(values=["Static"], state="disabled")
+                    # Explicitly reflect 'Static' view since set() might not fire the toggle callback # pylint: disable=line-too-long
+                    t_item['dyn_frame'].pack_forget()
+                    t_item['static_entry'].pack(fill="x", expand=True)
+
+            if 'rx_combo' in t_item:
+                current_val = t_item['rx_combo'].get()
+                t_item['rx_combo'].configure(values=options)
+                if current_val not in options:
+                    t_item['rx_combo'].set(options[0])
+
+
     # --- UI Callbacks ---
 
     def _on_target_class_change(self, selected_class):
@@ -246,7 +303,7 @@ class MessageActions(ctk.CTkToplevel): # pylint: disable=too-many-instance-attri
             self._on_target_type_change("N/A")
 
 
-    def _on_target_type_change(self, _): # pylint: disable=too-many-locals, too-many-branches
+    def _on_target_type_change(self, _): # pylint: disable=too-many-locals, too-many-branches, too-many-statements
         """Generate input fields for event payload based on dictionary definition."""
         # Clear existing entries
         for widget in self.target_payload_frame.winfo_children():
@@ -263,6 +320,7 @@ class MessageActions(ctk.CTkToplevel): # pylint: disable=too-many-instance-attri
 
         if not params:
             ctk.CTkLabel(self.target_payload_frame, text="No payload parameters required.", text_color="gray").pack(pady=10) # pylint: disable=line-too-long
+            self._update_target_rx_combos()
             return
 
         # Fetch underlying original VSCP parameter names (description) from dictionary
@@ -275,18 +333,23 @@ class MessageActions(ctk.CTkToplevel): # pylint: disable=too-many-instance-attri
         for i, param in enumerate(params):
             frame = ctk.CTkFrame(self.target_payload_frame, fg_color="transparent")
             frame.pack(fill="x", pady=2)
-            frame.grid_columnconfigure(1, weight=1)
 
-            # Map index to correct original description name
             param_name = param['name']
             if i < len(sorted_keys):
                 orig_key = sorted_keys[i]
                 param_name = dlc_def[orig_key].get('d', param_name)
 
             dtype = param['type']
-            # inner label pad = 0px outer + 5px wrapper + 5px frame padding = 10px visual offset
             lbl = ctk.CTkLabel(frame, text=f"{param_name}:", width=158, anchor="w")
             lbl.grid(row=0, column=0, sticky="w", padx=(0, 5))
+
+            var_mode = ctk.StringVar(value="Static")
+            combo_mode = ctk.CTkComboBox(frame, values=["Static", "From RX"], variable=var_mode, width=90) # pylint: disable=line-too-long
+            combo_mode.grid(row=0, column=1, sticky="w", padx=(0, 5))
+
+            container = ctk.CTkFrame(frame, fg_color="transparent")
+            container.grid(row=0, column=2, sticky="ew", padx=(0, 15))
+            frame.grid_columnconfigure(2, weight=1)
 
             # Smart placeholder based on type
             pl_text = f"Length: {param['length']} byte(s)"
@@ -300,28 +363,60 @@ class MessageActions(ctk.CTkToplevel): # pylint: disable=too-many-instance-attri
             elif dtype in ('onoffst', 'bool'):
                 pl_text = "e.g. 0 (Off) or 1 (On)"
 
-            # Live Validation Trace Binding for numerical inputs
-            var = ctk.StringVar()
+            # ---- Static Mode Configuration ----
+            static_var = ctk.StringVar()
             if 'int' in dtype:
                 max_v = (2**(8*param['length'])) - 1
-                var.trace_add("write", lambda *args, v=var, mv=max_v: self._apply_number_validation(v, mv)) # pylint: disable=line-too-long
+                static_var.trace_add("write", lambda *args, v=static_var, mv=max_v: self._apply_number_validation(v, mv)) # pylint: disable=line-too-long
             elif dtype in ('onoffst', 'bool'):
-                var.trace_add("write", lambda *args, v=var, mv=1: self._apply_number_validation(v, mv)) # pylint: disable=line-too-long
+                static_var.trace_add("write", lambda *args, v=static_var, mv=1: self._apply_number_validation(v, mv)) # pylint: disable=line-too-long
 
-            entry = ctk.CTkEntry(frame, textvariable=var, placeholder_text=pl_text)
-            entry.grid(row=0, column=1, sticky="ew", padx=(0, 15)) # 15 to adjust for inner scrollbar # pylint: disable=line-too-long
+            static_entry = ctk.CTkEntry(container, textvariable=static_var, placeholder_text=pl_text) # pylint: disable=line-too-long
+            static_entry.pack(fill="x", expand=True)
 
-            # Store reference to entry and its type definition
-            self.target_param_entries.append({'entry': entry, 'def': param})
+            # ---- Dynamic Mode Configuration ----
+            dyn_frame = ctk.CTkFrame(container, fg_color="transparent")
+            rx_combo = ctk.CTkComboBox(dyn_frame, values=["Byte 0"], width=95)
+            rx_combo.pack(side="left", padx=(0, 5))
+
+            ctk.CTkLabel(dyn_frame, text="Offset:").pack(side="left", padx=(0, 2))
+            offset_var = ctk.StringVar(value="0")
+            offset_entry = ctk.CTkEntry(dyn_frame, textvariable=offset_var, width=60)
+            offset_entry.pack(side="left", fill="x", expand=True)
+
+            # Dynamic toggle logic to hide/show respective frames based on Mode
+            def toggle_mode(choice, s_entry=static_entry, d_frame=dyn_frame):
+                if choice == "Static":
+                    d_frame.pack_forget()
+                    s_entry.pack(fill="x", expand=True)
+                else:
+                    s_entry.pack_forget()
+                    d_frame.pack(fill="x", expand=True)
+
+            combo_mode.configure(command=toggle_mode)
+
+            # Store references
+            self.target_param_entries.append({
+                'mode_var': var_mode,
+                'combo_mode': combo_mode,
+                'static_entry': static_entry,
+                'dyn_frame': dyn_frame,
+                'rx_combo': rx_combo,
+                'offset_entry': offset_entry,
+                'def': param
+            })
 
             # Add tooltip with constraints if available
             constraint = param.get('constraint')
             if constraint:
                 if isinstance(constraint, dict) and 'min' in constraint:
-                    ToolTip(entry, f"Min: {constraint['min']}, Max: {constraint['max']}")
+                    ToolTip(static_entry, f"Min: {constraint['min']}, Max: {constraint['max']}")
                 elif isinstance(constraint, list):
                     options = ", ".join([f"{k}:{v}" for k, v in constraint])
-                    ToolTip(entry, f"Options: {options}")
+                    ToolTip(static_entry, f"Options: {options}")
+
+        # Keep context synchronized for dynamic parameters
+        self._update_target_rx_combos()
 
 
     def _on_react_type_change(self, selected_type): # pylint: disable=too-many-locals
@@ -336,11 +431,13 @@ class MessageActions(ctk.CTkToplevel): # pylint: disable=too-many-instance-attri
         class_name = self.trigger_widgets['class'].get()
         if class_name == "* ANY *" or selected_type == "* ANY *":
             ctk.CTkLabel(self.react_payload_frame, text="Select Class and Type to filter by payload.", text_color="gray").pack(pady=5) # pylint: disable=line-too-long
+            self._update_target_rx_combos()
             return
 
         params = vscp.dictionary.get_event_parameters(class_name, selected_type)
         if not params:
             ctk.CTkLabel(self.react_payload_frame, text="No payload parameters for this event.", text_color="gray").pack(pady=5) # pylint: disable=line-too-long
+            self._update_target_rx_combos()
             return
 
         class_id = vscp.dictionary.class_id(class_name)
@@ -383,7 +480,8 @@ class MessageActions(ctk.CTkToplevel): # pylint: disable=too-many-instance-attri
             self.react_param_entries.append({
                 'entry': entry,
                 'def': param,
-                'offset': current_offset
+                'offset': current_offset,
+                'friendly_name': param_name
             })
 
             current_offset += param['length']
@@ -395,6 +493,8 @@ class MessageActions(ctk.CTkToplevel): # pylint: disable=too-many-instance-attri
                 elif isinstance(constraint, list):
                     options = ", ".join([f"{k}:{v}" for k, v in constraint])
                     ToolTip(entry, f"Options: {options}")
+
+        self._update_target_rx_combos()
 
 
     def _on_trigger_mode_change(self, mode): # pylint: disable=too-many-statements
@@ -491,6 +591,8 @@ class MessageActions(ctk.CTkToplevel): # pylint: disable=too-many-instance-attri
             # Initial UI generation for "* ANY *"
             self._on_react_type_change("* ANY *")
 
+        self._update_target_rx_combos()
+
 
     # --- Action Logic ---
 
@@ -516,25 +618,40 @@ class MessageActions(ctk.CTkToplevel): # pylint: disable=too-many-instance-attri
         if not target_class or target_type == "N/A":
             return
 
-        # Parse user inputs based on parameter definition
+        # Parse user inputs based on parameter definition (Supports both Static & RX derived logic)
         raw_args = []
         for item in self.target_param_entries:
-            val_str = item['entry'].get()
+            mode = item['mode_var'].get()
             t_def = item['def']['type']
 
-            # Simple conversion based on expected VSCP dictionary type
-            if t_def in ('float', 'double'):
-                try:
-                    raw_args.append(float(val_str) if val_str else 0.0)
-                except ValueError:
-                    raw_args.append(0.0)
-            elif t_def in ('ascii', 'utf8'):
-                raw_args.append(val_str)
-            else: # assume int/hex/uint/raw/boolean
-                try:
-                    raw_args.append(int(val_str, 0) if val_str else 0)
-                except ValueError:
-                    raw_args.append(0)
+            if mode == "From RX":
+                rx_opt = item['rx_combo'].get()
+                rx_info = getattr(self, 'rx_param_map', {}).get(rx_opt, {'offset': 0, 'length': 1})
+                offset_val = self._parse_int_input(item['offset_entry'].get(), "0") or 0
+
+                raw_args.append({
+                    'type': 'dynamic',
+                    'rx_offset': rx_info['offset'],
+                    'rx_length': rx_info['length'],
+                    'val_offset': offset_val,
+                    'rx_opt_name': rx_opt,
+                    'target_type': t_def
+                })
+            else:
+                val_str = item['static_entry'].get()
+                # Simple conversion based on expected VSCP dictionary type
+                if t_def in ('float', 'double'):
+                    try:
+                        raw_args.append(float(val_str) if val_str else 0.0)
+                    except ValueError:
+                        raw_args.append(0.0)
+                elif t_def in ('ascii', 'utf8'):
+                    raw_args.append(val_str)
+                else: # assume int/hex/uint/raw/boolean
+                    try:
+                        raw_args.append(int(val_str, 0) if val_str else 0)
+                    except ValueError:
+                        raw_args.append(0)
 
         # 2. Gather Trigger Data
         mode = self.trigger_mode.get()
@@ -596,7 +713,7 @@ class MessageActions(ctk.CTkToplevel): # pylint: disable=too-many-instance-attri
             self._schedule_periodic(action['id'])
 
 
-    def _edit_action(self, action_id):
+    def _edit_action(self, action_id): # pylint: disable=too-many-branches, too-many-statements
         """Loads action details back into the Builder and removes it from the list."""
         action = next((a for a in self.actions if a['id'] == action_id), None)
         if not action:
@@ -610,31 +727,7 @@ class MessageActions(ctk.CTkToplevel): # pylint: disable=too-many-instance-attri
             widget.delete(0, 'end')
             widget.insert(0, f"0x{val:02X}" if val is not None else placeholder)
 
-        # 1. Populate Target Settings
-        _restore_any(self.target_node_entry, tgt.get('nickname'), "* DEFAULT *")
-        self.target_prio_combo.set(tgt['priority'])
-        self.target_class_combo.set(tgt['class'])
-        self._on_target_class_change(tgt['class'])
-        self.target_type_combo.set(tgt['type'])
-        self._on_target_type_change(tgt['type'])
-
-        # Refill payload parameter entries
-        for i, arg in enumerate(tgt['args']):
-            if i < len(self.target_param_entries):
-                entry = self.target_param_entries[i]['entry']
-                t_def = self.target_param_entries[i]['def']['type']
-
-                entry.delete(0, 'end')
-                if 'int' in t_def and not ('float' in t_def or 'double' in t_def):
-                    # Restore as hex visual format if it relies on hex, or pure integer
-                    if 'hex' in t_def:
-                        entry.insert(0, f"0x{int(arg):X}")
-                    else:
-                        entry.insert(0, str(arg))
-                else:
-                    entry.insert(0, str(arg))
-
-        # 2. Populate Trigger Settings
+        # 1. Populate Trigger Settings FIRST so RX Combos resolve dynamically correctly
         self.trigger_mode.set(mode)
         self._on_trigger_mode_change(mode)
 
@@ -664,18 +757,80 @@ class MessageActions(ctk.CTkToplevel): # pylint: disable=too-many-instance-attri
                     entry.delete(0, 'end')
                     entry.insert(0, arg)
 
+        # 2. Populate Target Settings
+        _restore_any(self.target_node_entry, tgt.get('nickname'), "* DEFAULT *")
+        self.target_prio_combo.set(tgt['priority'])
+        self.target_class_combo.set(tgt['class'])
+        self._on_target_class_change(tgt['class'])
+        self.target_type_combo.set(tgt['type'])
+        self._on_target_type_change(tgt['type'])
+
+        # Refill payload parameter entries & resolve modes (Static / Dynamic)
+        for i, arg in enumerate(tgt['args']):
+            if i < len(self.target_param_entries):
+                item = self.target_param_entries[i]
+                t_def = item['def']['type']
+
+                if isinstance(arg, dict) and arg.get('type') == 'dynamic':
+                    item['mode_var'].set("From RX")
+                    item['static_entry'].pack_forget()
+                    item['dyn_frame'].pack(fill="x", expand=True)
+
+                    item['rx_combo'].set(arg.get('rx_opt_name', "Byte 0"))
+                    item['offset_entry'].delete(0, 'end')
+                    item['offset_entry'].insert(0, str(arg.get('val_offset', 0)))
+                else:
+                    item['mode_var'].set("Static")
+                    item['dyn_frame'].pack_forget()
+                    item['static_entry'].pack(fill="x", expand=True)
+
+                    entry = item['static_entry']
+                    entry.delete(0, 'end')
+                    if 'int' in t_def and not ('float' in t_def or 'double' in t_def):
+                        # Restore as hex visual format if it relies on hex, or pure integer
+                        if 'hex' in t_def and not isinstance(arg, dict):
+                            entry.insert(0, f"0x{int(arg):X}")
+                        else:
+                            entry.insert(0, str(arg))
+                    else:
+                        entry.insert(0, str(arg))
+
         # 3. Delete the old action from active list
         self._delete_action(action_id)
 
 
-    def _execute_action(self, action_id):
+    def _execute_action(self, action_id, rx_data_bytes=None):
         """Generates raw payload and sends the VSCP event."""
         action = next((a for a in self.actions if a['id'] == action_id), None)
         if not action or action['paused']:
             return
 
         tgt = action['target']
-        payload = vscp.dictionary.construct_data(tgt['class'], tgt['type'], *tgt['args'])
+        resolved_args = []
+
+        for arg in tgt['args']:
+            # Evaluate dynamically mapped RX arguments vs Static configs
+            if isinstance(arg, dict) and arg.get('type') == 'dynamic':
+                rx_val = 0
+                if rx_data_bytes is not None:
+                    rx_off = arg.get('rx_offset', 0)
+                    rx_len = arg.get('rx_length', 1)
+                    if len(rx_data_bytes) >= rx_off + rx_len:
+                        val_bytes = bytes(rx_data_bytes[rx_off : rx_off + rx_len])
+                        rx_val = int.from_bytes(val_bytes, 'big')
+
+                final_val = rx_val + arg.get('val_offset', 0)
+                t_def = arg.get('target_type', '')
+
+                if 'float' in t_def or 'double' in t_def:
+                    resolved_args.append(float(final_val))
+                else:
+                    # By standard ensure that base negative values don't break VSCP packing logic unless intended # pylint: disable=line-too-long
+                    resolved_args.append(max(0, int(final_val)))
+            else:
+                resolved_args.append(arg)
+
+        payload = vscp.dictionary.construct_data(tgt['class'], tgt['type'], *resolved_args)
 
         tgt_node = tgt.get('nickname')
         if tgt_node is not None:
@@ -764,9 +919,9 @@ class MessageActions(ctk.CTkToplevel): # pylint: disable=too-many-instance-attri
             if match:
                 delay = cfg.get('delay', 0)
                 if delay > 0:
-                    self.after(delay, lambda aid=action['id']: self._execute_action(aid))
+                    self.after(delay, lambda aid=action['id'], db=data_bytes: self._execute_action(aid, rx_data_bytes=db)) # pylint: disable=line-too-long
                 else:
-                    self._execute_action(action['id'])
+                    self._execute_action(action['id'], rx_data_bytes=data_bytes)
 
 
     # --- Action List Management ---
