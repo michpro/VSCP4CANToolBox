@@ -24,7 +24,7 @@ from .tooltip import ToolTip
 class MessageFilters(ctk.CTkToplevel): # pylint: disable=too-many-instance-attributes
     """
     Control window for configuring VSCP message filters.
-    
+
     This class creates a floating window that allows building a list of filtering rules.
     Logic: Message is accepted if it matches Rule 1 OR Rule 2 OR ...
     Rule Logic: NodeID match AND Priority match AND Class match AND Type match.
@@ -50,7 +50,7 @@ class MessageFilters(ctk.CTkToplevel): # pylint: disable=too-many-instance-attri
         self.after(250, lambda: set_app_icon(self, icon_path))
 
         width = 1000
-        height = 656
+        height = 660
 
         app_window = parent.winfo_toplevel()
         x = int(app_window.winfo_rootx() + (app_window.winfo_width() / 2) - (width / 2))
@@ -118,14 +118,27 @@ class MessageFilters(ctk.CTkToplevel): # pylint: disable=too-many-instance-attri
 
         # 4. Type Selection
         ctk.CTkLabel(self.frame_builder, text="VSCP Types:", anchor="w").grid(row=4, column=0, padx=10, pady=5, sticky="nw")
-        self.scroll_types = ctk.CTkScrollableFrame(self.frame_builder, label_text="Select specific types (or none for All)")
+        self.scroll_types = ctk.CTkScrollableFrame(self.frame_builder, label_text="Select specific types")
         self.scroll_types.grid(row=4, column=1, padx=(0, 10), pady=5, sticky="nsew")
 
         self.type_checkboxes = {} # name -> IntVar
 
-        # 5. Add Button
+        # 5. Type Actions
+        self.frame_type_actions = ctk.CTkFrame(self.frame_builder, fg_color="transparent")
+        self.frame_type_actions.grid(row=5, column=1, padx=(0, 10), pady=(0, 5), sticky="ew")
+
+        self.btn_types_all = ctk.CTkButton(self.frame_type_actions, text="Select All", height=24, command=self._select_all_types)
+        self.btn_types_all.pack(side="left", expand=True, padx=(0, 2))
+
+        self.btn_types_none = ctk.CTkButton(self.frame_type_actions, text="Deselect All", height=24, command=self._deselect_all_types)
+        self.btn_types_none.pack(side="left", expand=True, padx=(2, 2))
+
+        self.btn_types_inv = ctk.CTkButton(self.frame_type_actions, text="Invert", height=24, command=self._invert_types)
+        self.btn_types_inv.pack(side="left", expand=True, padx=(2, 0))
+
+        # 6. Add Button
         self.btn_add_rule = ctk.CTkButton(self.frame_builder, text="Add Rule to List", command=self._add_rule, fg_color="green")
-        self.btn_add_rule.grid(row=5, column=0, columnspan=2, padx=10, pady=10, sticky="ew")
+        self.btn_add_rule.grid(row=6, column=0, columnspan=2, padx=10, pady=10, sticky="ew")
 
         # --- Section: Active Rules List (Right Panel) ---
         self.frame_list = ctk.CTkFrame(self)
@@ -192,6 +205,24 @@ class MessageFilters(ctk.CTkToplevel): # pylint: disable=too-many-instance-attri
             self.type_checkboxes[t_name] = var
             chk = ctk.CTkCheckBox(self.scroll_types, text=t_name, variable=var, border_width=2)
             chk.pack(anchor="w", pady=(0, 1))
+
+
+    def _select_all_types(self):
+        """Select all type checkboxes."""
+        for var in self.type_checkboxes.values():
+            var.set(1)
+
+
+    def _deselect_all_types(self):
+        """Deselect all type checkboxes."""
+        for var in self.type_checkboxes.values():
+            var.set(0)
+
+
+    def _invert_types(self):
+        """Invert the selection state of type checkboxes."""
+        for var in self.type_checkboxes.values():
+            var.set(0 if var.get() == 1 else 1)
 
 
     def _parse_node_ids(self, text):
